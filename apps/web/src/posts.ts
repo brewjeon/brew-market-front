@@ -25,7 +25,6 @@ async function get<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export const getPosts = (signal: AbortSignal) => get<PostSummary[]>('/posts', signal);
 export const getPost = (id: string, signal: AbortSignal) =>
   get<PostDetail>(`/posts/${encodeURIComponent(id)}`, signal);
 
