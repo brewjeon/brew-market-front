@@ -19,6 +19,10 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
+    const problem = await response.json().catch(() => null) as { code?: string } | null;
+    if (problem?.code === 'POST_STATUS_CONFLICT') {
+      throw new Error('이미 거래 완료된 글입니다. 새로고침해서 현재 상태를 확인해 주세요.');
+    }
     const messages: Record<number, string> = {
       400: '입력값을 확인해 주세요.',
       401: '다시 로그인해 주세요.',

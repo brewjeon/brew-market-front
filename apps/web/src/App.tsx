@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, formatPrice, getPost, getPosts, statusLabel } from './posts';
-import type { PostDetail, PostSummary } from './posts';
+import type { PostDetail, PostSummary, PostStatus } from './posts';
 import { currentMember, mutate } from './account';
 import type { Member } from './account';
 import PostForm from './PostForm';
@@ -160,7 +160,20 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
+  const [nextStatus, setNextStatus] = useState<PostStatus>(post.status);
   const [error, setError] = useState('');
+  async function changeStatus() {
+    if (changingStatus || deleting) return;
+    if (nextStatus === 'COMPLETED' && !window.confirm('거래 완료로 변경하면 이전 상태로 되돌릴 수 없습니다. 완료할까요?')) return;
+    setChangingStatus(true);
+    setError('');
+    try {
+      await mutate(`/posts/${post.id}/status`, 'PATCH', { status: nextStatus });
+      onSaved(post.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '상태를 변경하지 못했습니다.'); }
+    finally { setChangingStatus(false); }
+  }
   async function remove() {
     if (deleting) return;
     setDeleting(true);
@@ -183,6 +196,13 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
       <h2 className="description-label">물건 이야기</h2>
       <p className="description">{post.description || '등록된 설명이 없습니다.'}</p>
       {member && post.canManage && <section className="manage-post" aria-label="게시글 관리">
+        {post.status !== 'COMPLETED' ? <fieldset disabled={changingStatus || deleting} className="status-controls">
+          <label htmlFor="post-status">거래 상태</label>
+          <select id="post-status" value={nextStatus} onChange={(event) => setNextStatus(event.target.value as PostStatus)}>
+            <option value="FOR_SALE">판매 중</option><option value="RESERVED">예약 중</option><option value="COMPLETED">거래 완료</option>
+          </select>
+          <button disabled={nextStatus === post.status} onClick={changeStatus}>{changingStatus ? '변경 중…' : '상태 변경'}</button>
+        </fieldset> : <p className="hint">거래가 완료되었습니다. 이전 상태로 되돌릴 수 없습니다.</p>}
         <p className="hint">본인이 작성한 게시글만 수정·삭제할 수 있습니다.</p>
         <div className="actions"><button className="secondary" disabled={deleting} onClick={() => setEditing(true)}>수정</button><button className="secondary" disabled={deleting} onClick={() => setConfirming(true)}>삭제</button></div>
         {confirming && <div className="delete-confirm"><p>이 게시글을 삭제할까요? 목록과 상세 화면에서 사라집니다.</p><div className="actions"><button disabled={deleting} onClick={remove}>{deleting ? '삭제 중…' : '삭제 확인'}</button><button className="secondary" disabled={deleting} onClick={() => setConfirming(false)}>취소</button></div></div>}
