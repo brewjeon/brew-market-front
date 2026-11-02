@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ApiError, formatPrice, getPost, getPosts, statusLabel } from './posts';
-import type { PostDetail, PostSummary, PostStatus } from './posts';
+import { ApiError, formatPrice, getPost, statusLabel } from './posts';
+import type { PostDetail, PostStatus } from './posts';
 import { currentMember, mutate } from './account';
 import type { Member } from './account';
 import PostForm from './PostForm';
+import PostList from './features/posts/PostList';
 
-type PageData = { kind: 'list'; posts: PostSummary[] } | { kind: 'detail'; post: PostDetail };
+type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail };
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; data: PageData }
@@ -75,7 +76,7 @@ export default function App() {
       try {
         let data: PageData;
         if (route === '#/' || route === '#') {
-          data = { kind: 'list', posts: await getPosts(controller.signal) };
+          data = { kind: 'list' };
         } else if (match) {
           data = { kind: 'detail', post: await getPost(match[1], controller.signal) };
         } else {
@@ -119,39 +120,10 @@ export default function App() {
           </section>
         )}
         {!creating && state.kind === 'ready' && (state.data.kind === 'list'
-          ? <PostList posts={state.data.posts} />
+          ? <PostList key={retry} />
           : <PostContent key={`${state.data.post.id}-${retry}-${member?.userId ?? 'guest'}`} post={state.data.post} member={member} onSaved={saved} onDeleted={() => { window.location.hash = '/'; setRetry((value) => value + 1); }} />)}
       </main>
       <footer>가까운 곳에서 시작하는 새로운 쓰임 · 브루마켓</footer>
-    </>
-  );
-}
-
-function PostList({ posts }: { posts: PostSummary[] }) {
-  return (
-    <>
-      <section className="intro">
-        <p className="eyebrow">BREW MARKET</p>
-        <h1>필요한 물건,<br />새로운 쓰임을 만나다.</h1>
-        <p>마음에 드는 물건의 이야기를 살펴보세요.</p>
-      </section>
-      <div className="section-heading"><h2>새로 올라온 게시글</h2><span>최신 {posts.length}개</span></div>
-      {posts.length === 0 ? (
-        <section className="notice"><h3>아직 게시글이 없어요</h3><p>새로운 물건이 등록되면 여기에 표시됩니다.</p></section>
-      ) : (
-        <ul className="post-grid">
-          {posts.map((post) => (
-            <li key={post.id}>
-              <a className="post-card" href={`#/posts/${post.id}`}>
-                <span className={`badge ${post.status}`}>{statusLabel[post.status] ?? '상태 확인 중'}</span>
-                <h3>{post.title}</h3>
-                <p className="price">{formatPrice(post.price)}</p>
-                <span className="card-link">자세히 보기 <span aria-hidden="true">↗</span></span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
     </>
   );
 }

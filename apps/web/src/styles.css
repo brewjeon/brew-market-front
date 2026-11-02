@@ -40,6 +40,8 @@ time { color: #677467; font-size: 13px; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; }
 footer { border-top: 1px solid #e0e4db; padding: 28px; text-align: center; font-size: 12px; color: #677467; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.load-more { display: flex; justify-content: center; padding: 32px 0 12px; }
+.load-more button { min-width: 160px; }
 .status-controls { border: 0; padding: 0; margin: 16px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .status-controls select { font: inherit; padding: 10px; border: 1px solid #aab7a9; border-radius: 8px; background: white; }
 .secondary { background: #e9eee6; color: #25382d; }
