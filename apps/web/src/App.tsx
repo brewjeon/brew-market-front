@@ -4,6 +4,7 @@ import type { PostDetail, PostStatus } from './posts';
 import { currentMember, mutate } from './account';
 import type { Member } from './account';
 import PostForm from './PostForm';
+import PostImage from './PostImage';
 import PostList from './features/posts/PostList';
 
 type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail };
@@ -160,6 +161,7 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
     <article className="detail">
       <a className="back-link" href="#/">← 게시글 목록</a>
       <div className="detail-heading">
+        <PostImage url={post.imageUrl} title={post.title} />
         <span className={`badge ${post.status}`}>{statusLabel[post.status] ?? '상태 확인 중'}</span>
         <h1>{post.title}</h1>
         <p className="price">{formatPrice(post.price)}</p>

@@ -1,6 +1,7 @@
 export type PostStatus = 'FOR_SALE' | 'RESERVED' | 'COMPLETED';
 
 export interface PostSummary {
+  imageUrl: string | null;
   id: number;
   title: string;
   price: number;

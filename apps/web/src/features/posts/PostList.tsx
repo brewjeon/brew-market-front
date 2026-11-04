@@ -3,6 +3,7 @@ import { formatPrice, statusLabel } from '../../posts';
 import type { PostSummary } from '../../posts';
 import { fetchPostPage } from './postListApi';
 import type { PostPage } from './postListApi';
+import PostImage from '../../PostImage';
 
 export default function PostList() {
   const [input, setInput] = useState('');
@@ -122,6 +123,7 @@ export default function PostList() {
           {posts.map((post) => (
             <li key={post.id}>
               <a className="post-card" href={`#/posts/${post.id}`}>
+                <PostImage url={post.imageUrl} title={post.title} />
                 <span className={`badge ${post.status}`}>
                   {statusLabel[post.status] ?? '상태 확인 중'}
                 </span>
