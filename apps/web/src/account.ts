@@ -15,8 +15,10 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
   const csrf: { headerName: string; token: string } = await csrfResponse.json();
   const response = await fetch(`/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body instanceof FormData
+      ? { [csrf.headerName]: csrf.token }
+      : { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token },
+    body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { code?: string } | null;
@@ -29,6 +31,7 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
       403: '권한이 없거나 요청이 만료되었습니다. 본인의 게시글인지 확인해 주세요.',
       404: '이미 삭제되었거나 존재하지 않는 게시글입니다.',
       409: '다른 변경과 충돌했습니다. 최신 글을 다시 확인해 주세요.',
+      413: '사진 용량이 너무 큽니다. 5MB 이하로 선택해 주세요.',
     };
     throw new Error(messages[response.status] ?? '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
   }
