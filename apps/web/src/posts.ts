@@ -12,6 +12,23 @@ export interface PostDetail extends PostSummary {
   canManage: boolean;
   description: string;
   createdAt: string;
+  imageUrls: string[];
+}
+
+export interface PostDraft {
+  id: number;
+  title: string | null;
+  description: string | null;
+  price: number | null;
+  updatedAt: string;
+  expiresAt: string;
+  imageUrls: string[];
+}
+
+export async function getDrafts(): Promise<PostDraft[]> {
+  const response = await fetch('/api/drafts');
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json() as Promise<PostDraft[]>;
 }
 
 export class ApiError extends Error {
