@@ -8,13 +8,15 @@ export default function DraftList({ onResume, onClose }: {
   onClose: () => void;
 }) {
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
     getDrafts().then((items) => { if (active) setDrafts(items); })
-      .catch(() => { if (active) setError('임시저장 글을 불러오지 못했습니다.'); });
+      .catch(() => { if (active) setError('임시저장 글을 불러오지 못했습니다.'); })
+      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -33,7 +35,8 @@ export default function DraftList({ onResume, onClose }: {
     <div className="form-heading"><h2>임시저장 글</h2><button type="button" className="secondary" onClick={onClose}>× 닫기</button></div>
     <p className="hint">최대 5개까지 저장할 수 있습니다. 마지막 저장부터 3일 뒤 글과 사진이 삭제됩니다.</p>
     {error && <p role="alert" className="error-message">{error}</p>}
-    {drafts.length === 0 && !error && <p>임시저장한 글이 없습니다.</p>}
+    {loading && <p role="status">임시저장 글을 불러오고 있습니다.</p>}
+    {!loading && drafts.length === 0 && !error && <p>임시저장한 글이 없습니다.</p>}
     <ul className="draft-items">{drafts.map((draft) => <li key={draft.id}>
       <strong>{draft.title || '제목 없음'}</strong>
       <span className="hint">{new Date(draft.expiresAt).toLocaleString('ko-KR')}까지</span>

@@ -145,6 +145,7 @@ export default function App() {
 
 function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; member: Member | null; onSaved: (id: number) => void; onDeleted: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
@@ -170,12 +171,21 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
     finally { setDeleting(false); }
   }
   const createdAt = new Date(post.createdAt);
+  const imageUrls = post.imageUrls?.length ? post.imageUrls : post.imageUrl ? [post.imageUrl] : [];
   if (editing) return <PostForm post={post} onSaved={onSaved} onCancel={() => setEditing(false)} />;
   return (
     <article className="detail">
       <a className="back-link" href="#/">← 게시글 목록</a>
       <div className="detail-heading">
-        <PostImage url={post.imageUrl} title={post.title} />
+        <PostImage url={imageUrls[selectedImage] ?? null} title={post.title} />
+        {imageUrls.length > 1 && <div className="image-thumbnails" aria-label="게시글 사진 선택">
+          {imageUrls.map((url, index) => <button key={url} type="button"
+            aria-label={`${index + 1}번째 사진 보기`} aria-pressed={selectedImage === index}
+            className={selectedImage === index ? 'selected' : ''}
+            onClick={() => setSelectedImage(index)}>
+            <img src={`/api${url}`} alt="" loading="lazy" />
+          </button>)}
+        </div>}
         <span className={`badge ${post.status}`}>{statusLabel[post.status] ?? '상태 확인 중'}</span>
         <h1>{post.title}</h1>
         <p className="price">{formatPrice(post.price)}</p>

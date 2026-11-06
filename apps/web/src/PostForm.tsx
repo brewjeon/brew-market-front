@@ -9,6 +9,40 @@ function savedPhotos(urls: string[]): Photo[] {
   return urls.map((url, sourceIndex) => ({ id: url, url, sourceIndex }));
 }
 
+async function uploadablePhoto(file: File): Promise<File> {
+  if (['image/jpeg', 'image/png'].includes(file.type)) {
+    if (file.size > 5 * 1024 * 1024) throw new Error('사진은 장당 5MB 이하여야 합니다.');
+    return file;
+  }
+  if (!['image/heic', 'image/heif', 'image/webp'].includes(file.type)
+      && !/\.(heic|heif|webp)$/i.test(file.name)) {
+    throw new Error('JPEG·PNG·HEIC·WebP 사진만 선택할 수 있습니다.');
+  }
+  if (file.size > 20 * 1024 * 1024) throw new Error('변환할 사진은 20MB 이하여야 합니다.');
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error('이 기기에서는 사진 형식을 읽지 못했습니다. JPEG·PNG 사진을 선택해 주세요.');
+  }
+  try {
+    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+    canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('사진을 변환하지 못했습니다.');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((result) => result ? resolve(result) : reject(new Error('사진을 변환하지 못했습니다.')),
+        'image/jpeg', 0.85));
+    if (blob.size > 5 * 1024 * 1024) throw new Error('변환된 사진이 5MB를 넘습니다.');
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } finally {
+    bitmap.close();
+  }
+}
+
 function PhotoPreview({ photo }: { photo: Photo }) {
   const [source, setSource] = useState(photo.url ? `/api${photo.url}` : '');
   useEffect(() => {
@@ -37,26 +71,28 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
   ));
   const [draftId, setDraftId] = useState<number | null>(draft?.id ?? null);
   const [busy, setBusy] = useState(false);
+  const [selecting, setSelecting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const gallery = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
 
-  function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
+  async function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (picked.length === 0) return;
+    if (picked.length === 0 || selecting) return;
     if (photos.length + picked.length > 5) {
       setError('사진은 최대 5장까지 올릴 수 있습니다.');
       return;
     }
-    if (picked.some((file) => !['image/jpeg', 'image/png'].includes(file.type)
-      || file.size > 5 * 1024 * 1024)) {
-      setError('JPEG·PNG 사진을 장당 5MB 이하로 선택해 주세요.');
-      return;
-    }
+    setSelecting(true);
     setError('');
-    setPhotos((current) => [...current, ...picked.map((file) => ({ id: crypto.randomUUID(), file }))]);
+    try {
+      const prepared = await Promise.all(picked.map(uploadablePhoto));
+      setPhotos((current) => [...current, ...prepared.map((file) => ({ id: crypto.randomUUID(), file }))]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '사진을 준비하지 못했습니다.');
+    } finally { setSelecting(false); }
   }
 
   function move(from: number, to: number) {
@@ -104,7 +140,7 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
   }
 
   async function draftClick() {
-    if (busy) return;
+    if (busy || selecting) return;
     setBusy(true);
     setError('');
     try { await saveDraft(); }
@@ -114,7 +150,7 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || selecting) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -125,8 +161,8 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
         await mutate(`/posts/${post.id}`, 'PATCH', formData('post', payload));
         onSaved(post.id);
       } else if (draftId) {
-        const saved = await saveDraft();
-        const published = await mutate<{ id: number }>(`/drafts/${saved.id}/publish`, 'POST');
+        const published = await mutate<{ id: number }>(`/drafts/${draftId}/publish`,
+          'POST', formData('post', payload));
         onSaved(published.id);
       } else {
         const published = await mutate<{ id: number }>('/posts', 'POST', formData('post', payload));
@@ -143,15 +179,16 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
       <button type="button" className="secondary" aria-label="작성 화면 닫기" onClick={onCancel}>× 닫기</button>
     </div>
     <fieldset disabled={busy}>
-      <p className="hint">사진은 선택 사항이며 최대 5장입니다. 첫 번째 사진이 대표 사진입니다.</p>
+      <p className="hint">사진은 선택 사항이며 최대 5장입니다. 첫 번째 사진이 대표 사진입니다. HEIC·WebP는 기기에서 읽을 수 있으면 JPEG로 변환합니다.</p>
       <div className="actions">
-        <button type="button" className="secondary" disabled={photos.length >= 5} onClick={() => gallery.current?.click()}>사진 선택</button>
-        <button type="button" className="secondary" disabled={photos.length >= 5} onClick={() => camera.current?.click()}>바로 촬영</button>
+        <button type="button" className="secondary" disabled={photos.length >= 5 || selecting} onClick={() => gallery.current?.click()}>사진 선택</button>
+        <button type="button" className="secondary capture-button" disabled={photos.length >= 5 || selecting} onClick={() => camera.current?.click()}>바로 촬영</button>
         <input ref={gallery} className="visually-hidden" aria-label="사진 선택" type="file"
-          accept="image/jpeg,image/png" multiple onChange={selectPhotos} />
+          accept="image/*" multiple onChange={(event) => void selectPhotos(event)} />
         <input ref={camera} className="visually-hidden" aria-label="바로 촬영" type="file"
-          accept="image/*" capture="environment" onChange={selectPhotos} />
+          accept="image/*" capture="environment" onChange={(event) => void selectPhotos(event)} />
       </div>
+      {selecting && <p role="status" className="hint">사진을 준비하고 있습니다…</p>}
       <ol className="photo-list">
         {photos.map((photo, index) => <li key={photo.id} className="photo-item">
           <PhotoPreview photo={photo} />
@@ -173,8 +210,8 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
       {notice && <p role="status" className="hint">{notice}</p>}
       {error && <p role="alert" className="error-message">{error}</p>}
       <div className="actions">
-        <button type="submit">{busy ? '처리 중…' : post ? '수정 저장' : '게시하기'}</button>
-        {!post && <button type="button" className="secondary" onClick={() => void draftClick()}>임시저장</button>}
+        <button type="submit" disabled={selecting}>{busy ? '처리 중…' : post ? '수정 저장' : '게시하기'}</button>
+        {!post && <button type="button" className="secondary" disabled={selecting} onClick={() => void draftClick()}>임시저장</button>}
       </div>
     </fieldset>
   </form>;

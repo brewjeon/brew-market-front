@@ -22,6 +22,12 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { code?: string } | null;
+    if (path.startsWith('/drafts') && method === 'POST' && response.status === 409) {
+      throw new Error('임시저장은 최대 5개입니다. 기존 글을 삭제한 뒤 다시 시도해 주세요.');
+    }
+    if (path.startsWith('/drafts') && response.status === 404) {
+      throw new Error('임시저장 글이 만료되었거나 삭제되었습니다.');
+    }
     if (problem?.code === 'POST_STATUS_CONFLICT') {
       throw new Error('이미 거래 완료된 글입니다. 새로고침해서 현재 상태를 확인해 주세요.');
     }
