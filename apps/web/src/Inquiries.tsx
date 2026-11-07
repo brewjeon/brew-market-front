@@ -7,7 +7,7 @@ type RoomPage = { rooms: Room[]; nextBefore: number | null };
 type Message = { id: number; senderId: number; content: string };
 
 async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch('/api/inquiries' + path, { signal });
+  const response = await fetch('/api/inquiries' + path, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('대화를 불러오지 못했습니다.');
   return response.json();
 }
@@ -100,12 +100,45 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const [rooms, setRooms] = useState<Room[]>([]);
   const [next, setNext] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [peerLastReadId, setPeerLastReadId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const messageList = useRef<HTMLUListElement>(null);
   const readThrough = useRef(0);
   const pendingReads = useRef(new Set<number>());
+  const lastSentId = messages.reduce<number | undefined>(
+    (latest, message) => message.senderId === userId ? message.id : latest, undefined,
+  );
+  const needsReceipt = lastSentId !== undefined && (peerLastReadId === null || peerLastReadId < lastSentId);
+
+  useEffect(() => {
+    if (!roomId || !needsReceipt) return;
+
+    const request = new AbortController();
+    let fetching = false;
+    async function updateReceipt() {
+      if (document.visibilityState !== 'visible' || fetching) return;
+      fetching = true;
+      try {
+        const state = await read<{ peerLastReadId: number }>('/' + roomId + '/read', request.signal);
+        if (!request.signal.aborted) setPeerLastReadId(state.peerLastReadId);
+      } catch {
+        // 상태 조회에 실패하면 다음 주기에 다시 확인한다.
+      } finally {
+        fetching = false;
+      }
+    }
+
+    void updateReceipt();
+    const timer = window.setInterval(updateReceipt, 3000);
+    document.addEventListener('visibilitychange', updateReceipt);
+    return () => {
+      request.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', updateReceipt);
+    };
+  }, [roomId, needsReceipt, lastSentId]);
 
   useEffect(() => {
     const list = messageList.current;
@@ -194,6 +227,9 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
               className={message.senderId === userId ? 'inquiry-own' : undefined}>
               <span className="inquiry-sender">{message.senderId === userId ? '나' : '상대방'}</span>
               <span className="inquiry-bubble">{message.content}</span>
+              {message.id === lastSentId && peerLastReadId !== null && (
+                <span className="inquiry-receipt">{peerLastReadId >= message.id ? '읽음' : '안 읽음'}</span>
+              )}
             </li>
           ))}</ul>
           {!error && !loading && <InquiryForm label="보내기" send={async (content) => {
