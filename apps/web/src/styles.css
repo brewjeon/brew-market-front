@@ -43,6 +43,7 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .inquiry-rooms strong, .inquiry-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inquiry-preview, .inquiry-sender, .inquiry-empty { color: #526356; }
 .inquiry-preview, .inquiry-sender { font-size: 13px; }
+.inquiry-unread { flex-shrink: 0; margin-left: auto; padding: 3px 8px; border-radius: 12px; background: #dcecdf; color: #276347; font-size: 12px; }
 .inquiry-messages { display: flex; flex-direction: column; gap: 12px; }
 .inquiry-messages li { display: flex; flex-direction: column; align-items: flex-start; }
 .inquiry-messages .inquiry-own { align-items: flex-end; }

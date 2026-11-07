@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mutate } from './account';
 
-type Room = { id: number; postId: number | null; title: string; lastMessage: string };
+type Room = { id: number; postId: number | null; title: string; lastMessage: string; unread: boolean };
 type RoomPage = { rooms: Room[]; nextBefore: number | null };
 type Message = { id: number; senderId: number; content: string };
 
@@ -103,6 +103,43 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const messageList = useRef<HTMLUListElement>(null);
+  const readThrough = useRef(0);
+  const pendingReads = useRef(new Set<number>());
+
+  useEffect(() => {
+    const list = messageList.current;
+    if (!roomId || !list || loading || error) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (document.visibilityState !== 'visible') return;
+
+      const visibleIds = entries.filter((entry) => entry.isIntersecting)
+        .map((entry) => Number(entry.target.getAttribute('data-message-id')));
+      const messageId = Math.max(readThrough.current, ...visibleIds);
+      if (messageId === readThrough.current || pendingReads.current.has(messageId)) return;
+
+      pendingReads.current.add(messageId);
+      void mutate('/inquiries/' + roomId + '/read', 'PUT', { messageId })
+        .then(() => { readThrough.current = Math.max(readThrough.current, messageId); })
+        .catch(() => { /* 다음 조회에서 다시 읽음 요청을 보낼 수 있다. */ })
+        .finally(() => { pendingReads.current.delete(messageId); });
+    });
+
+    function observeVisibleTab() {
+      observer.disconnect();
+      if (document.visibilityState === 'visible') {
+        list?.querySelectorAll('[data-message-id]').forEach((item) => observer.observe(item));
+      }
+    }
+
+    observeVisibleTab();
+    document.addEventListener('visibilitychange', observeVisibleTab);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', observeVisibleTab);
+    };
+  }, [roomId, messages, loading, error]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -152,8 +189,9 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {error && <p role="alert">{error}</p>}
       {roomId ? (
         <>
-          <ul className="inquiry-messages">{messages.map((message) => (
-            <li key={message.id} className={message.senderId === userId ? 'inquiry-own' : undefined}>
+          <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
+            <li key={message.id} data-message-id={message.id}
+              className={message.senderId === userId ? 'inquiry-own' : undefined}>
               <span className="inquiry-sender">{message.senderId === userId ? '나' : '상대방'}</span>
               <span className="inquiry-bubble">{message.content}</span>
             </li>
@@ -170,6 +208,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
             <li key={room.id}>
               <a href={'#/inquiries/' + room.id}>
                 <span><strong>{room.title}</strong><span className="inquiry-preview">{room.lastMessage}</span></span>
+                {room.unread && <span className="inquiry-unread">새 메시지</span>}
                 <span aria-hidden="true">›</span>
               </a>
             </li>
