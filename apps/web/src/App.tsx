@@ -7,9 +7,10 @@ import PostForm from './PostForm';
 import PostImage from './PostImage';
 import PostList from './features/posts/PostList';
 import DraftList from './DraftList';
-import Inquiries, { InquiryForm } from './Inquiries';
+import Inquiries, { NewInquiry } from './Inquiries';
 
-type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail } | { kind: 'inquiries'; roomId?: string };
+type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail }
+  | { kind: 'inquiries'; roomId?: string } | { kind: 'new-inquiry'; post: PostDetail };
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; data: PageData }
@@ -83,6 +84,7 @@ export default function App() {
     setState({ kind: 'loading' });
     const match = /^#\/posts\/([1-9]\d*)$/.exec(route);
     const inquiry = /^#\/inquiries(?:\/([1-9]\d*))?$/.exec(route);
+    const newInquiry = /^#\/inquiries\/new\/([1-9]\d*)$/.exec(route);
 
     async function load() {
       try {
@@ -93,6 +95,8 @@ export default function App() {
           data = { kind: 'detail', post: await getPost(match[1], controller.signal) };
         } else if (inquiry) {
           data = { kind: 'inquiries', roomId: inquiry[1] };
+        } else if (newInquiry) {
+          data = { kind: 'new-inquiry', post: await getPost(newInquiry[1], controller.signal) };
         } else {
           throw new ApiError(404);
         }
@@ -145,6 +149,12 @@ export default function App() {
             ? member
               ? <Inquiries key={`${member.userId}-${state.data.roomId ?? 'list'}`} roomId={state.data.roomId} userId={member.userId} />
               : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 내 대화를 볼 수 있습니다.'}</p>
+            : state.data.kind === 'new-inquiry'
+              ? member
+                ? state.data.post.canManage
+                  ? <p>내 게시글에는 거래 문의를 보낼 수 없습니다.</p>
+                  : <NewInquiry key={`${member.userId}-${state.data.post.id}`} post={state.data.post} />
+                : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 거래 문의를 보낼 수 있습니다.'}</p>
             : <PostContent key={`${state.data.post.id}-${retry}-${member?.userId ?? 'guest'}`} post={state.data.post} member={member} onSaved={saved} onDeleted={() => { window.location.hash = '/'; setRetry((value) => value + 1); }} />)}
       </main>
       <footer>가까운 곳에서 시작하는 새로운 쓰임 · 브루마켓</footer>
@@ -202,10 +212,9 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
       </div>
       <h2 className="description-label">물건 이야기</h2>
       <p className="description">{post.description || '등록된 설명이 없습니다.'}</p>
-      {member && !post.canManage && <InquiryForm label="거래 문의 보내기" send={async (content) => {
-        const result = await mutate<{ roomId: number }>('/inquiries', 'POST', { postId: post.id, content });
-        window.location.hash = '/inquiries/' + result.roomId;
-      }} />}
+      {member && !post.canManage && (
+        <a className="button" href={`#/inquiries/new/${post.id}`}>대화 신청</a>
+      )}
       {member && post.canManage && <section className="manage-post" aria-label="게시글 관리">
         {post.status !== 'COMPLETED' ? <fieldset disabled={changingStatus || deleting} className="status-controls">
           <label htmlFor="post-status">거래 상태</label>

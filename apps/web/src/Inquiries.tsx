@@ -36,15 +36,63 @@ export function InquiryForm({ send, label }: { send: (content: string) => Promis
   }
 
   return (
-    <form onSubmit={submit}>
-      <label>
-        메시지
-        <textarea value={content} onChange={(event) => setContent(event.target.value)}
-          maxLength={2000} rows={3} disabled={busy} />
-      </label>
-      <button disabled={busy || !content.trim()}>{label}</button>
+    <form className="inquiry-composer" onSubmit={submit}>
+      <div className="inquiry-composer-row">
+        <textarea aria-label="메시지" placeholder="메시지를 입력하세요"
+          value={content} onChange={(event) => setContent(event.target.value)}
+          maxLength={2000} rows={2} disabled={busy} />
+        <button disabled={busy || !content.trim()}>{busy ? '전송 중…' : label}</button>
+      </div>
       {error && <p role="alert">{error}</p>}
     </form>
+  );
+}
+
+export function NewInquiry({ post }: { post: { id: number; title: string } }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const postId = post.id;
+
+  useEffect(() => {
+    const request = new AbortController();
+    void read<{ roomId: number | null }>('/by-post/' + postId, request.signal)
+      .then(({ roomId }) => {
+        if (request.signal.aborted) return;
+        if (roomId !== null) {
+          window.location.replace('#/inquiries/' + roomId);
+        } else {
+          setReady(true);
+        }
+      })
+      .catch(() => {
+        if (!request.signal.aborted) setError('기존 대화를 확인하지 못했습니다.');
+      });
+    return () => request.abort();
+  }, [postId, attempt]);
+
+  return (
+    <section className="detail inquiry-panel">
+      <a href={'#/posts/' + postId}>← 게시글</a>
+      <h1>{post.title}</h1>
+      {error ? (
+        <>
+          <p role="alert">{error}</p>
+          <button type="button" onClick={() => {
+            setError('');
+            setAttempt((value) => value + 1);
+          }}>다시 시도</button>
+        </>
+      ) : ready ? (
+        <>
+          <p className="inquiry-empty">판매자에게 첫 메시지를 보내보세요.</p>
+          <InquiryForm label="보내기" send={async (content) => {
+            const result = await mutate<{ roomId: number }>('/inquiries', 'POST', { postId, content });
+            window.location.replace('#/inquiries/' + result.roomId);
+          }} />
+        </>
+      ) : <p role="status">대화를 확인하는 중…</p>}
+    </section>
   );
 }
 
@@ -94,18 +142,20 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   }
 
   return (
-    <section className="detail">
+    <section className="detail inquiry-panel">
       {roomId && <a href="#/inquiries">← 내 대화</a>}
-      <h1>{roomId ? '거래 문의 내역' : '내 대화'}</h1>
+      <div className="inquiry-heading">
+        <h1>{roomId ? '거래 문의 내역' : '내 대화'}</h1>
+        <button type="button" className="inquiry-refresh" onClick={reload} disabled={loading}>새로고침</button>
+      </div>
       {loading && <p role="status">불러오는 중…</p>}
       {error && <p role="alert">{error}</p>}
-      <button type="button" className="secondary" onClick={reload} disabled={loading}>새로고침</button>
       {roomId ? (
         <>
-          <ul>{messages.map((message) => (
-            <li key={message.id} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              <strong>{message.senderId === userId ? '나' : '상대방'} </strong>
-              {message.content}
+          <ul className="inquiry-messages">{messages.map((message) => (
+            <li key={message.id} className={message.senderId === userId ? 'inquiry-own' : undefined}>
+              <span className="inquiry-sender">{message.senderId === userId ? '나' : '상대방'}</span>
+              <span className="inquiry-bubble">{message.content}</span>
             </li>
           ))}</ul>
           {!error && !loading && <InquiryForm label="보내기" send={async (content) => {
@@ -115,10 +165,13 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
         </>
       ) : (
         <>
-          {!loading && !error && rooms.length === 0 && <p>아직 대화가 없습니다.</p>}
-          <ul>{rooms.map((room) => (
+          {!loading && !error && rooms.length === 0 && <p className="inquiry-empty">아직 대화가 없습니다.</p>}
+          <ul className="inquiry-rooms">{rooms.map((room) => (
             <li key={room.id}>
-              <a href={'#/inquiries/' + room.id}>{room.title} · {room.lastMessage}</a>
+              <a href={'#/inquiries/' + room.id}>
+                <span><strong>{room.title}</strong><span className="inquiry-preview">{room.lastMessage}</span></span>
+                <span aria-hidden="true">›</span>
+              </a>
             </li>
           ))}</ul>
           {next !== null && <button type="button" onClick={() => void loadMore()} disabled={loading}>더보기</button>}
