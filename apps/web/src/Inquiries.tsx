@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mutate } from './account';
 
-type Room = { id: number; postId: number; title: string; lastMessage: string };
+type Room = { id: number; postId: number | null; title: string; lastMessage: string };
 type RoomPage = { rooms: Room[]; nextBefore: number | null };
 type Message = { id: number; senderId: number; content: string };
 
