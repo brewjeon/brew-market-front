@@ -31,6 +31,27 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .notice h1 { font-size: 25px; }
 .notice p { color: #677467; }
 .detail { max-width: 760px; margin: 40px auto 0; }
+.inquiry-panel { max-width: 640px; }
+.inquiry-panel h1 { margin: 12px 0; font-size: 26px; }
+.inquiry-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.inquiry-refresh { padding: 6px 10px; background: transparent; color: #276347; }
+.inquiry-rooms, .inquiry-messages { list-style: none; padding: 0; }
+.inquiry-rooms li + li { border-top: 1px solid #dce2d8; }
+.inquiry-rooms a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 8px; }
+.inquiry-rooms a:hover { background: #edf0e8; }
+.inquiry-rooms a > span:first-child { min-width: 0; }
+.inquiry-rooms strong, .inquiry-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inquiry-preview, .inquiry-sender, .inquiry-empty { color: #526356; }
+.inquiry-preview, .inquiry-sender { font-size: 13px; }
+.inquiry-messages { display: flex; flex-direction: column; gap: 12px; }
+.inquiry-messages li { display: flex; flex-direction: column; align-items: flex-start; }
+.inquiry-messages .inquiry-own { align-items: flex-end; }
+.inquiry-bubble { max-width: 85%; padding: 8px 12px; border-radius: 14px; background: #edf0e8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inquiry-own .inquiry-bubble { background: #dcecdf; }
+.inquiry-composer { margin-top: 16px; }
+.inquiry-composer-row { display: flex; align-items: flex-end; gap: 8px; }
+.inquiry-composer textarea { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid #bfcabd; border-radius: 12px; font: inherit; resize: vertical; }
+.inquiry-composer button { flex-shrink: 0; padding: 9px 14px; }
 .back-link { font-size: 14px; color: #647366; }
 .detail-heading { margin: 35px 0; padding-bottom: 32px; border-bottom: 1px solid #dce2d8; }
 .detail h1 { font-size: clamp(27px, 4vw, 38px); line-height: 1.4; overflow-wrap: anywhere; }
