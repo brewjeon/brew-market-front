@@ -225,7 +225,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
           <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
             <li key={message.id} data-message-id={message.id}
               className={message.senderId === userId ? 'inquiry-own' : undefined}>
-              <span className="inquiry-sender">{message.senderId === userId ? '나' : '상대방'}</span>
+              {message.senderId !== userId && <span className="inquiry-sender">상대방</span>}
               <span className="inquiry-bubble">{message.content}</span>
               {message.id === lastSentId && peerLastReadId !== null && (
                 <span className="inquiry-receipt">{peerLastReadId >= message.id ? '읽음' : '안 읽음'}</span>
