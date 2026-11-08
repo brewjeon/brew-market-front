@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mutate } from './account';
 
-type Room = { id: number; postId: number | null; title: string; lastMessage: string };
+type Room = { id: number; postId: number | null; title: string; lastMessage: string; unread: boolean };
 type RoomPage = { rooms: Room[]; nextBefore: number | null };
 type Message = { id: number; senderId: number; content: string };
 
 async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch('/api/inquiries' + path, { signal });
+  const response = await fetch('/api/inquiries' + path, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('대화를 불러오지 못했습니다.');
   return response.json();
 }
@@ -100,9 +100,79 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const [rooms, setRooms] = useState<Room[]>([]);
   const [next, setNext] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [peerLastReadId, setPeerLastReadId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const messageList = useRef<HTMLUListElement>(null);
+  const readThrough = useRef(0);
+  const pendingReads = useRef(new Set<number>());
+  const lastSentId = messages.reduce<number | undefined>(
+    (latest, message) => message.senderId === userId ? message.id : latest, undefined,
+  );
+  const needsReceipt = lastSentId !== undefined && (peerLastReadId === null || peerLastReadId < lastSentId);
+
+  useEffect(() => {
+    if (!roomId || !needsReceipt) return;
+
+    const request = new AbortController();
+    let fetching = false;
+    async function updateReceipt() {
+      if (document.visibilityState !== 'visible' || fetching) return;
+      fetching = true;
+      try {
+        const state = await read<{ peerLastReadId: number }>('/' + roomId + '/read', request.signal);
+        if (!request.signal.aborted) setPeerLastReadId(state.peerLastReadId);
+      } catch {
+        // 상태 조회에 실패하면 다음 주기에 다시 확인한다.
+      } finally {
+        fetching = false;
+      }
+    }
+
+    void updateReceipt();
+    const timer = window.setInterval(updateReceipt, 3000);
+    document.addEventListener('visibilitychange', updateReceipt);
+    return () => {
+      request.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', updateReceipt);
+    };
+  }, [roomId, needsReceipt, lastSentId]);
+
+  useEffect(() => {
+    const list = messageList.current;
+    if (!roomId || !list || loading || error) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (document.visibilityState !== 'visible') return;
+
+      const visibleIds = entries.filter((entry) => entry.isIntersecting)
+        .map((entry) => Number(entry.target.getAttribute('data-message-id')));
+      const messageId = Math.max(readThrough.current, ...visibleIds);
+      if (messageId === readThrough.current || pendingReads.current.has(messageId)) return;
+
+      pendingReads.current.add(messageId);
+      void mutate('/inquiries/' + roomId + '/read', 'PUT', { messageId })
+        .then(() => { readThrough.current = Math.max(readThrough.current, messageId); })
+        .catch(() => { /* 다음 조회에서 다시 읽음 요청을 보낼 수 있다. */ })
+        .finally(() => { pendingReads.current.delete(messageId); });
+    });
+
+    function observeVisibleTab() {
+      observer.disconnect();
+      if (document.visibilityState === 'visible') {
+        list?.querySelectorAll('[data-message-id]').forEach((item) => observer.observe(item));
+      }
+    }
+
+    observeVisibleTab();
+    document.addEventListener('visibilitychange', observeVisibleTab);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', observeVisibleTab);
+    };
+  }, [roomId, messages, loading, error]);
 
   useEffect(() => {
     const request = new AbortController();
@@ -152,10 +222,14 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {error && <p role="alert">{error}</p>}
       {roomId ? (
         <>
-          <ul className="inquiry-messages">{messages.map((message) => (
-            <li key={message.id} className={message.senderId === userId ? 'inquiry-own' : undefined}>
-              <span className="inquiry-sender">{message.senderId === userId ? '나' : '상대방'}</span>
+          <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
+            <li key={message.id} data-message-id={message.id}
+              className={message.senderId === userId ? 'inquiry-own' : undefined}>
+              {message.senderId !== userId && <span className="inquiry-sender">상대방</span>}
               <span className="inquiry-bubble">{message.content}</span>
+              {message.id === lastSentId && peerLastReadId !== null && (
+                <span className="inquiry-receipt">{peerLastReadId >= message.id ? '읽음' : '안 읽음'}</span>
+              )}
             </li>
           ))}</ul>
           {!error && !loading && <InquiryForm label="보내기" send={async (content) => {
@@ -170,6 +244,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
             <li key={room.id}>
               <a href={'#/inquiries/' + room.id}>
                 <span><strong>{room.title}</strong><span className="inquiry-preview">{room.lastMessage}</span></span>
+                {room.unread && <span className="inquiry-unread">새 메시지</span>}
                 <span aria-hidden="true">›</span>
               </a>
             </li>
