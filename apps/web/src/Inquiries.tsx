@@ -110,35 +110,55 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const lastSentId = messages.reduce<number | undefined>(
     (latest, message) => message.senderId === userId ? message.id : latest, undefined,
   );
-  const needsReceipt = lastSentId !== undefined && (peerLastReadId === null || peerLastReadId < lastSentId);
-
   useEffect(() => {
-    if (!roomId || !needsReceipt) return;
+    if (!roomId) return;
 
     const request = new AbortController();
     let fetching = false;
-    async function updateReceipt() {
-      if (document.visibilityState !== 'visible' || fetching) return;
+    let changed = false;
+
+    async function syncRoom() {
+      if (fetching) {
+        changed = true;
+        return;
+      }
       fetching = true;
       try {
-        const state = await read<{ peerLastReadId: number }>('/' + roomId + '/read', request.signal);
-        if (!request.signal.aborted) setPeerLastReadId(state.peerLastReadId);
-      } catch {
-        // 상태 조회에 실패하면 다음 주기에 다시 확인한다.
+        const [history, state] = await Promise.all([
+          read<Message[]>('/' + roomId + '/messages', request.signal),
+          read<{ peerLastReadId: number }>('/' + roomId + '/read', request.signal),
+        ]);
+        if (request.signal.aborted) return;
+        setMessages(history);
+        setPeerLastReadId((current) => Math.max(current ?? 0, state.peerLastReadId));
+        setError('');
+      } catch (cause) {
+        if (!request.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : '대화를 불러오지 못했습니다.');
+        }
       } finally {
         fetching = false;
+        if (!request.signal.aborted) {
+          setLoading(false);
+          if (changed) {
+            changed = false;
+            void syncRoom();
+          }
+        }
       }
     }
 
-    void updateReceipt();
-    const timer = window.setInterval(updateReceipt, 3000);
-    document.addEventListener('visibilitychange', updateReceipt);
+    const updates = new EventSource('/api/inquiries/' + roomId + '/events');
+    // 재연결 때도 서버에서 현재 상태를 다시 읽어 연결이 끊긴 동안의 변경을 반영한다.
+    updates.onopen = () => void syncRoom();
+    updates.onmessage = () => void syncRoom();
+    void syncRoom();
+
     return () => {
       request.abort();
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', updateReceipt);
+      updates.close();
     };
-  }, [roomId, needsReceipt, lastSentId]);
+  }, [roomId, refresh]);
 
   useEffect(() => {
     const list = messageList.current;
@@ -175,14 +195,14 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   }, [roomId, messages, loading, error]);
 
   useEffect(() => {
+    if (roomId) return;
+
     const request = new AbortController();
-    const result = roomId
-      ? read<Message[]>('/' + roomId + '/messages', request.signal).then(setMessages)
-      : read<RoomPage>('', request.signal).then((page) => {
-          setRooms(page.rooms);
-          setNext(page.nextBefore);
-        });
-    void result.catch((cause: Error) => {
+    void read<RoomPage>('', request.signal).then((page) => {
+      if (request.signal.aborted) return;
+      setRooms(page.rooms);
+      setNext(page.nextBefore);
+    }).catch((cause: Error) => {
       if (!request.signal.aborted) setError(cause.message);
     }).finally(() => {
       if (!request.signal.aborted) setLoading(false);
@@ -223,7 +243,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {roomId ? (
         <>
           <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
-            <li key={message.id} data-message-id={message.id}
+            <li key={message.id} data-message-id={message.senderId !== userId ? message.id : undefined}
               className={message.senderId === userId ? 'inquiry-own' : undefined}>
               {message.senderId !== userId && <span className="inquiry-sender">상대방</span>}
               <span className="inquiry-bubble">{message.content}</span>
@@ -234,7 +254,6 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
           ))}</ul>
           {!error && !loading && <InquiryForm label="보내기" send={async (content) => {
             await mutate('/inquiries/' + roomId + '/messages', 'POST', { content });
-            reload();
           }} />}
         </>
       ) : (
