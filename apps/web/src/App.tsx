@@ -8,6 +8,7 @@ import PostImage from './PostImage';
 import PostList from './features/posts/PostList';
 import DraftList from './DraftList';
 import Inquiries, { NewInquiry } from './Inquiries';
+import InquiryNotifications from './InquiryNotifications';
 
 type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail }
   | { kind: 'inquiries'; roomId?: string } | { kind: 'new-inquiry'; post: PostDetail };
@@ -121,6 +122,10 @@ export default function App() {
           {authLoading ? <span>로그인 확인 중…</span> : member ? <>
             <span className="header-note">회원 {member.userId}</span>
             <a href="#/inquiries" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 대화</a>
+            <InquiryNotifications key={member.userId} onNavigate={() => {
+              setCreating(false);
+              setDraftsOpen(false);
+            }} />
             <button onClick={() => { setSelectedDraft(null); setDraftsOpen(false); setCreating(true); }}>글쓰기</button>
             <button className="secondary" onClick={() => { setCreating(false); setDraftsOpen(true); }}>임시저장 글</button>
             <button className="secondary" disabled={loggingOut} onClick={logout}>{loggingOut ? '로그아웃 중…' : '로그아웃'}</button>
