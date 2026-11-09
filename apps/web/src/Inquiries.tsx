@@ -1,23 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mutate } from './account';
-
-type Room = {
-  id: number;
-  postId: number | null;
-  title: string;
-  lastMessage: string;
-  lastMessageId: number;
-  unreadCount: number;
-};
-type RoomPage = { rooms: Room[]; nextBefore: number | null; unreadRoomCount: number };
+import { readInquiry as read } from './inquiryApi';
+import type { Room, RoomPage } from './inquiryApi';
 type Message = { id: number; senderId: number; content: string };
-
-async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch('/api/inquiries' + path, { signal, cache: 'no-store' });
-  if (!response.ok) throw new Error('대화를 불러오지 못했습니다.');
-  return response.json();
-}
 
 export function InquiryForm({ send, label }: { send: (content: string) => Promise<void>; label: string }) {
   const [content, setContent] = useState('');

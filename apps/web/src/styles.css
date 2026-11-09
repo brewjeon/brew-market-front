@@ -49,6 +49,10 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .inquiry-preview, .inquiry-sender { font-size: 13px; }
 .inquiry-receipt { align-self: flex-end; margin: 4px 4px 0 0; color: #526356; font-size: 11px; line-height: 1.3; }
 .inquiry-unread { flex-shrink: 0; margin-left: auto; padding: 3px 8px; border-radius: 12px; background: #dcecdf; color: #276347; font-size: 12px; }
+.inquiry-notifications { position: relative; }
+.inquiry-notifications-trigger { display: inline-flex; align-items: center; gap: 6px; }
+.inquiry-notifications-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 3; width: min(340px, calc(100vw - 32px)); max-height: min(440px, 65vh); overflow: auto; padding: 16px; border: 1px solid #dce2d8; border-radius: 12px; background: white; box-shadow: 0 8px 24px #20382520; }
+@media (max-width: 720px) { .inquiry-notifications { position: static; } .header { position: relative; } .inquiry-notifications-panel { top: calc(100% + 8px); right: 16px; } }
 .inquiry-messages { display: flex; flex-direction: column; gap: 12px; }
 .inquiry-messages li { display: flex; flex-direction: column; align-items: flex-start; }
 .inquiry-messages .inquiry-own { align-items: flex-end; }
