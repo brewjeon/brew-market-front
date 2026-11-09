@@ -129,7 +129,7 @@ export default function App() {
             <button onClick={() => { setSelectedDraft(null); setDraftsOpen(false); setCreating(true); }}>글쓰기</button>
             <button className="secondary" onClick={() => { setCreating(false); setDraftsOpen(true); }}>임시저장 글</button>
             <button className="secondary" disabled={loggingOut} onClick={logout}>{loggingOut ? '로그아웃 중…' : '로그아웃'}</button>
-          </> : <a className="button" href="http://localhost:8080/oauth2/authorization/google">구글 로그인</a>}
+          </> : <a className="button" href="/oauth2/authorization/google">구글 로그인</a>}
         </nav>
       </header>
       <main>
