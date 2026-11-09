@@ -2,8 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { mutate } from './account';
 
-type Room = { id: number; postId: number | null; title: string; lastMessage: string; unread: boolean };
-type RoomPage = { rooms: Room[]; nextBefore: number | null };
+type Room = {
+  id: number;
+  postId: number | null;
+  title: string;
+  lastMessage: string;
+  lastMessageId: number;
+  unreadCount: number;
+};
+type RoomPage = { rooms: Room[]; nextBefore: number | null; unreadRoomCount: number };
 type Message = { id: number; senderId: number; content: string };
 
 async function read<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -99,6 +106,9 @@ export function NewInquiry({ post }: { post: { id: number; title: string } }) {
 export default function Inquiries({ roomId, userId }: { roomId?: string; userId: number }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [next, setNext] = useState<number | null>(null);
+  const [unreadRoomCount, setUnreadRoomCount] = useState(0);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [listUpdatePending, setListUpdatePending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [peerLastReadId, setPeerLastReadId] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -107,6 +117,8 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const messageList = useRef<HTMLUListElement>(null);
   const readThrough = useRef(0);
   const pendingReads = useRef(new Set<number>());
+  const moreRequest = useRef<AbortController | null>(null);
+  const jumpToLatest = useRef(false);
   const lastSentId = messages.reduce<number | undefined>(
     (latest, message) => message.senderId === userId ? message.id : latest, undefined,
   );
@@ -198,17 +210,71 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
     if (roomId) return;
 
     const request = new AbortController();
-    void read<RoomPage>('', request.signal).then((page) => {
-      if (request.signal.aborted) return;
-      setRooms(page.rooms);
-      setNext(page.nextBefore);
-    }).catch((cause: Error) => {
-      if (!request.signal.aborted) setError(cause.message);
-    }).finally(() => {
-      if (!request.signal.aborted) setLoading(false);
-    });
-    return () => request.abort();
-  }, [roomId, refresh]);
+    const query = unreadOnly ? '?unreadOnly=true' : '';
+    let firstPage: RoomPage | undefined;
+    let fetching = false;
+    let changed = false;
+
+    async function syncList() {
+      if (fetching) {
+        changed = true;
+        return;
+      }
+      fetching = true;
+      try {
+        const page = await read<RoomPage>(query, request.signal);
+        if (request.signal.aborted) return;
+
+        setUnreadRoomCount(page.unreadRoomCount);
+        const previousRooms = firstPage?.rooms;
+        const samePage = previousRooms?.length === page.rooms.length && page.rooms.every((room, index) => {
+          const previous = previousRooms[index];
+          return room.id === previous.id && room.lastMessageId === previous.lastMessageId
+            && room.unreadCount === previous.unreadCount && room.title === previous.title
+            && room.postId === previous.postId;
+        });
+        if (firstPage && window.scrollY > 0) {
+          setListUpdatePending(!samePage);
+        } else if (!samePage) {
+          moreRequest.current?.abort();
+          moreRequest.current = null;
+          firstPage = page;
+          setRooms(page.rooms);
+          setNext(page.nextBefore);
+          setListUpdatePending(false);
+          if (jumpToLatest.current) {
+            jumpToLatest.current = false;
+            window.scrollTo(0, 0);
+          }
+        }
+        setError('');
+      } catch (cause) {
+        if (!request.signal.aborted && !firstPage) {
+          setError(cause instanceof Error ? cause.message : '대화를 불러오지 못했습니다.');
+        }
+      } finally {
+        fetching = false;
+        if (!request.signal.aborted) {
+          if (!moreRequest.current) setLoading(false);
+          if (changed) {
+            changed = false;
+            void syncList();
+          }
+        }
+      }
+    }
+
+    const updates = new EventSource('/api/inquiries/events');
+    updates.onopen = () => void syncList();
+    updates.onmessage = () => void syncList();
+    void syncList();
+    return () => {
+      request.abort();
+      moreRequest.current?.abort();
+      moreRequest.current = null;
+      updates.close();
+    };
+  }, [roomId, refresh, unreadOnly]);
 
   function reload() {
     setError('');
@@ -217,18 +283,35 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   }
 
   async function loadMore() {
-    if (next === null || loading) return;
+    if (next === null || loading || moreRequest.current || listUpdatePending) return;
+    const request = new AbortController();
+    moreRequest.current = request;
     setLoading(true);
     setError('');
     try {
-      const page = await read<RoomPage>('?before=' + next);
+      const query = '?before=' + next + (unreadOnly ? '&unreadOnly=true' : '');
+      const page = await read<RoomPage>(query, request.signal);
+      if (request.signal.aborted) return;
       setRooms((current) => [...current, ...page.rooms.filter((room) => !current.some(({ id }) => id === room.id))]);
       setNext(page.nextBefore);
     } catch {
-      setError('다음 대화를 불러오지 못했습니다.');
+      if (!request.signal.aborted) setError('다음 대화를 불러오지 못했습니다.');
     } finally {
-      setLoading(false);
+      if (moreRequest.current === request) {
+        moreRequest.current = null;
+        setLoading(false);
+      }
     }
+  }
+
+  function toggleUnread() {
+    jumpToLatest.current = false;
+    setLoading(true);
+    setError('');
+    setRooms([]);
+    setNext(null);
+    setListUpdatePending(false);
+    setUnreadOnly((current) => !current);
   }
 
   return (
@@ -236,7 +319,14 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {roomId && <a href="#/inquiries">← 내 대화</a>}
       <div className="inquiry-heading">
         <h1>{roomId ? '거래 문의 내역' : '내 대화'}</h1>
-        <button type="button" className="inquiry-refresh" onClick={reload} disabled={loading}>새로고침</button>
+        <div className="inquiry-heading-actions">
+          {!roomId && (
+            <button type="button" aria-pressed={unreadOnly} onClick={toggleUnread}>
+              안 읽은 대화 <span className="inquiry-unread">{unreadRoomCount}</span>
+            </button>
+          )}
+          <button type="button" className="inquiry-refresh" onClick={reload} disabled={loading}>새로고침</button>
+        </div>
       </div>
       {loading && <p role="status">불러오는 중…</p>}
       {error && <p role="alert">{error}</p>}
@@ -258,17 +348,33 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
         </>
       ) : (
         <>
-          {!loading && !error && rooms.length === 0 && <p className="inquiry-empty">아직 대화가 없습니다.</p>}
+          {listUpdatePending && (
+            <button type="button" className="inquiry-list-update" disabled={loading} onClick={() => {
+              jumpToLatest.current = true;
+              reload();
+            }}>새 메시지 보기</button>
+          )}
+          {!loading && !error && rooms.length === 0 && (
+            <p className="inquiry-empty">{unreadOnly ? '안 읽은 대화가 없습니다.' : '아직 대화가 없습니다.'}</p>
+          )}
           <ul className="inquiry-rooms">{rooms.map((room) => (
             <li key={room.id}>
               <a href={'#/inquiries/' + room.id}>
                 <span><strong>{room.title}</strong><span className="inquiry-preview">{room.lastMessage}</span></span>
-                {room.unread && <span className="inquiry-unread">새 메시지</span>}
-                <span aria-hidden="true">›</span>
+                <span className="inquiry-room-actions">
+                  {room.unreadCount > 0 && (
+                    <span className="inquiry-unread" aria-label={`안 읽은 메시지 ${room.unreadCount}건`}>
+                      {room.unreadCount}
+                    </span>
+                  )}
+                  <span aria-hidden="true">›</span>
+                </span>
               </a>
             </li>
           ))}</ul>
-          {next !== null && <button type="button" onClick={() => void loadMore()} disabled={loading}>더보기</button>}
+          {next !== null && (
+            <button type="button" onClick={() => void loadMore()} disabled={loading || listUpdatePending}>더보기</button>
+          )}
         </>
       )}
     </section>
