@@ -34,6 +34,10 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .inquiry-panel { max-width: 640px; }
 .inquiry-panel h1 { margin: 12px 0; font-size: 26px; }
 .inquiry-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.inquiry-heading-actions, .inquiry-room-actions { display: flex; align-items: center; gap: 8px; }
+.inquiry-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+.inquiry-heading-actions [aria-pressed="true"] { outline: 2px solid #276347; }
+.inquiry-list-update { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1; }
 .inquiry-refresh { padding: 6px 10px; background: transparent; color: #276347; }
 .inquiry-rooms, .inquiry-messages { list-style: none; padding: 0; }
 .inquiry-rooms li + li { border-top: 1px solid #dce2d8; }
