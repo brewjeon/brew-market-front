@@ -8,8 +8,11 @@ export interface PostPage {
   nextId: number | null;
 }
 
-export async function fetchPostPage(cursor: PostPage | null, signal: AbortSignal, keyword = ''): Promise<PostPage> {
-  const query = new URLSearchParams({ paged: 'true' });
+export async function fetchPostPage(
+  cursor: PostPage | null, signal: AbortSignal, keyword = '', mine = false,
+): Promise<PostPage> {
+  const query = new URLSearchParams();
+  if (!mine) query.set('paged', 'true');
 
   if (keyword) query.set('keyword', keyword);
 
@@ -18,7 +21,9 @@ export async function fetchPostPage(cursor: PostPage | null, signal: AbortSignal
     query.set('beforeId', String(cursor.nextId));
   }
 
-  const response = await fetch(`/api/posts?${query}`, { signal });
+  const path = mine ? '/api/posts/mine' : '/api/posts';
+  const url = query.size > 0 ? `${path}?${query}` : path;
+  const response = await fetch(url, mine ? { signal, cache: 'no-store' } : { signal });
 
   if (!response.ok) throw new ApiError(response.status);
 
