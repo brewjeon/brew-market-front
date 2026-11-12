@@ -5,7 +5,7 @@ import { fetchPostPage } from './postListApi';
 import type { PostPage } from './postListApi';
 import PostImage from '../../PostImage';
 
-export default function PostList() {
+export default function PostList({ mine = false }: { mine?: boolean }) {
   const [input, setInput] = useState('');
   const [keyword, setKeyword] = useState('');
 
@@ -31,7 +31,7 @@ export default function PostList() {
     setError('');
 
     try {
-      const next = await fetchPostPage(cursor, controller.signal, keyword);
+      const next = await fetchPostPage(cursor, controller.signal, keyword, mine);
       if (controller.signal.aborted) {
         return;
       }
@@ -69,22 +69,22 @@ export default function PostList() {
       request.current?.abort();
       pending.current = false;
     };
-  }, [keyword]);
+  }, [keyword, mine]);
 
   return (
     <>
-      <section className="intro">
+      {!mine && <section className="intro">
         <p className="eyebrow">BREW MARKET</p>
         <h1>
           필요한 물건,<br />
           새로운 쓰임을 만나다.
         </h1>
         <p>마음에 드는 물건의 이야기를 살펴보세요.</p>
-      </section>
+      </section>}
 
       <div className="section-heading search-heading">
-        <h2>{keyword ? '검색 결과' : '새로 올라온 게시글'}</h2>
-        <form
+        <h2>{mine ? '내 글' : keyword ? '검색 결과' : '새로 올라온 게시글'}</h2>
+        {!mine && <form
           role="search"
           className="search-form"
           onSubmit={(event) => {
@@ -104,7 +104,7 @@ export default function PostList() {
             onChange={(event) => setInput(event.target.value)}
           />
           <button type="submit">검색</button>
-        </form>
+        </form>}
       </div>
 
       <p className="hint">
@@ -115,7 +115,7 @@ export default function PostList() {
         <section className="notice">
           <h3>{keyword ? '검색 결과가 없어요' : '아직 게시글이 없어요'}</h3>
           <p>
-            {keyword ? '다른 검색어로 찾아보세요.' : '새로운 물건이 등록되면 여기에 표시됩니다.'}
+            {mine ? '내가 게시한 글이 여기에 표시됩니다.' : keyword ? '다른 검색어로 찾아보세요.' : '새로운 물건이 등록되면 여기에 표시됩니다.'}
           </p>
         </section>
       ) : (

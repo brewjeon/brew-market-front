@@ -10,7 +10,7 @@ import DraftList from './DraftList';
 import Inquiries, { NewInquiry } from './Inquiries';
 import InquiryNotifications from './InquiryNotifications';
 
-type PageData = { kind: 'list' } | { kind: 'detail'; post: PostDetail }
+type PageData = { kind: 'list' } | { kind: 'mine' } | { kind: 'detail'; post: PostDetail }
   | { kind: 'inquiries'; roomId?: string } | { kind: 'new-inquiry'; post: PostDetail };
 type LoadState =
   | { kind: 'loading' }
@@ -92,6 +92,8 @@ export default function App() {
         let data: PageData;
         if (route === '#/' || route === '#') {
           data = { kind: 'list' };
+        } else if (route === '#/my-posts') {
+          data = { kind: 'mine' };
         } else if (match) {
           data = { kind: 'detail', post: await getPost(match[1], controller.signal) };
         } else if (inquiry) {
@@ -122,6 +124,7 @@ export default function App() {
           {authLoading ? <span>로그인 확인 중…</span> : member ? <>
             <span className="header-note">회원 {member.userId}</span>
             <a href="#/inquiries" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 대화</a>
+            <a href="#/my-posts" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 글</a>
             <InquiryNotifications key={member.userId} onNavigate={() => {
               setCreating(false);
               setDraftsOpen(false);
@@ -150,6 +153,10 @@ export default function App() {
         )}
         {!creating && !draftsOpen && state.kind === 'ready' && (state.data.kind === 'list'
           ? <PostList key={retry} />
+          : state.data.kind === 'mine'
+            ? member
+              ? <PostList key={`mine-${member.userId}-${retry}`} mine />
+              : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 내 글을 볼 수 있습니다.'}</p>
           : state.data.kind === 'inquiries'
             ? member
               ? <Inquiries key={`${member.userId}-${state.data.roomId ?? 'list'}`} roomId={state.data.roomId} userId={member.userId} />
