@@ -9,8 +9,9 @@ import PostList from './features/posts/PostList';
 import DraftList from './DraftList';
 import Inquiries, { NewInquiry } from './Inquiries';
 import InquiryNotifications from './InquiryNotifications';
+import FavoriteList from './FavoriteList';
 
-type PageData = { kind: 'list' } | { kind: 'mine' } | { kind: 'detail'; post: PostDetail }
+type PageData = { kind: 'list' } | { kind: 'mine' } | { kind: 'favorites' } | { kind: 'detail'; post: PostDetail }
   | { kind: 'inquiries'; roomId?: string } | { kind: 'new-inquiry'; post: PostDetail };
 type LoadState =
   | { kind: 'loading' }
@@ -94,6 +95,8 @@ export default function App() {
           data = { kind: 'list' };
         } else if (route === '#/my-posts') {
           data = { kind: 'mine' };
+        } else if (route === '#/favorites') {
+          data = { kind: 'favorites' };
         } else if (match) {
           data = { kind: 'detail', post: await getPost(match[1], controller.signal) };
         } else if (inquiry) {
@@ -125,6 +128,7 @@ export default function App() {
             <span className="header-note">회원 {member.userId}</span>
             <a href="#/inquiries" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 대화</a>
             <a href="#/my-posts" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 글</a>
+            <a href="#/favorites" onClick={() => { setCreating(false); setDraftsOpen(false); }}>관심글</a>
             <InquiryNotifications key={member.userId} onNavigate={() => {
               setCreating(false);
               setDraftsOpen(false);
@@ -157,6 +161,10 @@ export default function App() {
             ? member
               ? <PostList key={`mine-${member.userId}-${retry}`} mine />
               : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 내 글을 볼 수 있습니다.'}</p>
+          : state.data.kind === 'favorites'
+            ? member
+              ? <FavoriteList key={`${member.userId}-${retry}`} />
+              : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 관심글을 볼 수 있습니다.'}</p>
           : state.data.kind === 'inquiries'
             ? member
               ? <Inquiries key={`${member.userId}-${state.data.roomId ?? 'list'}`} roomId={state.data.roomId} userId={member.userId} />
@@ -175,6 +183,31 @@ export default function App() {
 }
 
 function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; member: Member | null; onSaved: (id: number) => void; onDeleted: () => void }) {
+  const [favorite, setFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favoriteReady, setFavoriteReady] = useState(false);
+  const [favoriteError, setFavoriteError] = useState('');
+  useEffect(() => {
+    if (!member) return;
+    const controller = new AbortController();
+    setFavoriteReady(false);
+    fetch(`/api/favorites/${post.id}`, { signal: controller.signal, cache: 'no-store' })
+      .then((response) => { if (!response.ok) throw new ApiError(response.status); return response.json() as Promise<{ favorite: boolean }>; })
+      .then((result) => { setFavorite(result.favorite); setFavoriteReady(true); setFavoriteError(''); })
+      .catch(() => { if (!controller.signal.aborted) setFavoriteError('관심글 상태를 확인하지 못했습니다.'); });
+    return () => controller.abort();
+  }, [member?.userId, post.id]);
+  async function toggleFavorite() {
+    if (favoriteLoading) return;
+    setFavoriteLoading(true);
+    setFavoriteError('');
+    try {
+      await mutate(`/favorites/${post.id}`, favorite ? 'DELETE' : 'POST');
+      setFavorite(!favorite);
+    } catch (cause) {
+      setFavoriteError(cause instanceof Error ? cause.message : '관심글을 변경하지 못했습니다.');
+    } finally { setFavoriteLoading(false); }
+  }
   const [editing, setEditing] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [deleting, setDeleting] = useState(false);
@@ -224,6 +257,11 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
       </div>
       <h2 className="description-label">물건 이야기</h2>
       <p className="description">{post.description || '등록된 설명이 없습니다.'}</p>
+      {member && !post.canManage && <div>
+        <button type="button" className="secondary" aria-pressed={favorite} disabled={favoriteLoading || !favoriteReady}
+          onClick={() => void toggleFavorite()}>{favoriteLoading ? '처리 중…' : favorite ? '관심글 해제' : '관심글 저장'}</button>
+        {favoriteError && <p role="alert">{favoriteError}</p>}
+      </div>}
       {member && !post.canManage && (
         <a className="button" href={`#/inquiries/new/${post.id}`}>대화 신청</a>
       )}
