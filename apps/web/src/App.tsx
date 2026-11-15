@@ -253,6 +253,7 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
         <span className={`badge ${post.status}`}>{statusLabel[post.status] ?? '상태 확인 중'}</span>
         <h1>{post.title}</h1>
         <p className="price">{formatPrice(post.price)}</p>
+        {post.neighborhoodName && <p>거래 동네 · {post.neighborhoodName}</p>}
         {!Number.isNaN(createdAt.getTime()) && <time dateTime={post.createdAt}>{createdAt.toLocaleString('ko-KR')} 작성</time>}
       </div>
       <h2 className="description-label">물건 이야기</h2>

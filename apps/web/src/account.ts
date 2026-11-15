@@ -21,7 +21,10 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
     body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    const problem = await response.json().catch(() => null) as { code?: string } | null;
+    const problem = await response.json().catch(() => null) as { code?: string; message?: string } | null;
+    if (problem?.code === 'NEIGHBORHOOD_VERIFICATION') {
+      throw new Error(problem.message ?? '거래 동네를 다시 인증해 주세요.');
+    }
     if (path.startsWith('/drafts') && method === 'POST' && response.status === 409) {
       throw new Error('임시저장은 최대 5개입니다. 기존 글을 삭제한 뒤 다시 시도해 주세요.');
     }

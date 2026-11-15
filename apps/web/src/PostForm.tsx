@@ -4,6 +4,18 @@ import { mutate } from './account';
 import type { PostDetail, PostDraft } from './posts';
 
 type Photo = { id: string; url?: string; sourceIndex?: number; file?: File };
+type Neighborhood = { id: number; name: string };
+
+function currentPosition(): Promise<GeolocationCoordinates> {
+  if (!navigator.geolocation) return Promise.reject(new Error('이 브라우저에서는 위치를 확인할 수 없습니다.'));
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolve(coords),
+      () => reject(new Error('위치 권한과 기기의 위치 설정을 확인해 주세요.')),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    );
+  });
+}
 
 function savedPhotos(urls: string[]): Photo[] {
   return urls.map((url, sourceIndex) => ({ id: url, url, sourceIndex }));
@@ -74,8 +86,46 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
   const [selecting, setSelecting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
+  const [neighborhoodId, setNeighborhoodId] = useState(post?.neighborhoodId ?? 0);
+  const [verifying, setVerifying] = useState(false);
+  const [neighborhoodError, setNeighborhoodError] = useState('');
   const gallery = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/neighborhoods/verified', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('인증된 동네를 불러오지 못했습니다.');
+        const options: Neighborhood[] = await response.json();
+        if (!controller.signal.aborted) {
+          setNeighborhoods((current) => [...options.filter((option) =>
+            !current.some((item) => item.id === option.id)), ...current]);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setNeighborhoodError('인증된 동네를 불러오지 못했습니다.');
+      });
+    return () => controller.abort();
+  }, []);
+
+  async function verifyNeighborhood() {
+    if (busy || verifying) return;
+    setVerifying(true);
+    setNeighborhoodError('');
+    try {
+      const { latitude, longitude, accuracy } = await currentPosition();
+      const verified = await mutate<Neighborhood>('/neighborhoods/verify', 'POST', { latitude, longitude, accuracy });
+      setNeighborhoods((current) => [...current.filter((option) => option.id !== verified.id), verified]);
+      setNeighborhoodId(verified.id);
+      setError('');
+    } catch (cause) {
+      setNeighborhoodError(cause instanceof Error ? cause.message : '동네를 인증하지 못했습니다.');
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   async function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(event.target.files ?? []);
@@ -150,13 +200,16 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || selecting) return;
+    if (busy || selecting || verifying) return;
     setBusy(true);
     setError('');
     setNotice('');
     try {
       if (!title.trim() || !description.trim()) throw new Error('제목과 본문을 입력해 주세요.');
-      const payload = { title: title.trim(), description: description.trim(), price: amount(true) };
+      if (!neighborhoods.some((option) => option.id === neighborhoodId)) {
+        throw new Error('거래 동네를 인증하고 선택해 주세요.');
+      }
+      const payload = { title: title.trim(), description: description.trim(), price: amount(true), neighborhoodId };
       if (post) {
         await mutate(`/posts/${post.id}`, 'PATCH', formData('post', payload));
         onSaved(post.id);
@@ -206,11 +259,22 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
       <label>제목<input maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       <label>본문<textarea rows={8} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
       <label>가격 (원)<input type="number" min="0" step="1" value={price} onChange={(event) => setPrice(event.target.value)} /></label>
+      <label>거래 동네
+        <select value={neighborhoods.some((option) => option.id === neighborhoodId) ? neighborhoodId : 0}
+          onChange={(event) => setNeighborhoodId(Number(event.target.value))}>
+          <option value={0}>인증한 동네를 선택하세요</option>
+          {neighborhoods.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+        </select>
+      </label>
+      <button type="button" className="secondary" disabled={verifying} onClick={() => void verifyNeighborhood()}>
+        {verifying ? '위치 확인 중…' : '현재 위치로 동네 인증'}
+      </button>
+      {neighborhoodError && <p role="alert" className="error-message">{neighborhoodError}</p>}
       <p className="hint">나눔은 0원을 입력하세요. 임시저장은 빈 항목이 있어도 가능합니다.</p>
       {notice && <p role="status" className="hint">{notice}</p>}
       {error && <p role="alert" className="error-message">{error}</p>}
       <div className="actions">
-        <button type="submit" disabled={selecting}>{busy ? '처리 중…' : post ? '수정 저장' : '게시하기'}</button>
+        <button type="submit" disabled={selecting || verifying}>{busy ? '처리 중…' : post ? '수정 저장' : '게시하기'}</button>
         {!post && <button type="button" className="secondary" disabled={selecting} onClick={() => void draftClick()}>임시저장</button>}
       </div>
     </fieldset>
