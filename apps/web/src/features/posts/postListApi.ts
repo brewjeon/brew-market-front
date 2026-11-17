@@ -8,13 +8,25 @@ export interface PostPage {
   nextId: number | null;
 }
 
+export interface NeighborhoodFilterOption {
+  id: number;
+  name: string;
+}
+
+export async function fetchNeighborhoods(signal: AbortSignal): Promise<NeighborhoodFilterOption[]> {
+  const response = await fetch('/api/neighborhoods', { signal });
+  if (!response.ok) throw new ApiError(response.status);
+  return response.json();
+}
+
 export async function fetchPostPage(
-  cursor: PostPage | null, signal: AbortSignal, keyword = '', mine = false,
+  cursor: PostPage | null, signal: AbortSignal, keyword = '', mine = false, neighborhoodId = '',
 ): Promise<PostPage> {
   const query = new URLSearchParams();
   if (!mine) query.set('paged', 'true');
 
   if (keyword) query.set('keyword', keyword);
+  if (!mine && neighborhoodId) query.set('neighborhoodId', neighborhoodId);
 
   if (cursor?.nextCreatedAt && cursor.nextId !== null) {
     query.set('beforeTime', cursor.nextCreatedAt);
