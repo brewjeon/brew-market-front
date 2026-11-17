@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatPrice, statusLabel } from '../../posts';
 import type { PostSummary } from '../../posts';
-import { fetchPostPage } from './postListApi';
-import type { PostPage } from './postListApi';
+import { fetchNeighborhoods, fetchPostPage } from './postListApi';
+import type { NeighborhoodFilterOption, PostPage } from './postListApi';
 import PostImage from '../../PostImage';
 
 export default function PostList({ mine = false }: { mine?: boolean }) {
   const [input, setInput] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [neighborhoodId, setNeighborhoodId] = useState('');
+  const [neighborhoods, setNeighborhoods] = useState<NeighborhoodFilterOption[]>([]);
+  const [neighborhoodError, setNeighborhoodError] = useState(false);
 
   const [posts, setPosts] = useState<PostSummary[]>([]);
   const [page, setPage] = useState<PostPage | null>(null);
@@ -31,7 +34,7 @@ export default function PostList({ mine = false }: { mine?: boolean }) {
     setError('');
 
     try {
-      const next = await fetchPostPage(cursor, controller.signal, keyword, mine);
+      const next = await fetchPostPage(cursor, controller.signal, keyword, mine, neighborhoodId);
       if (controller.signal.aborted) {
         return;
       }
@@ -60,6 +63,18 @@ export default function PostList({ mine = false }: { mine?: boolean }) {
   }
 
   useEffect(() => {
+    if (mine) return;
+    const controller = new AbortController();
+    setNeighborhoodError(false);
+    void fetchNeighborhoods(controller.signal).then((options) => {
+      if (!controller.signal.aborted) setNeighborhoods(options);
+    }).catch(() => {
+      if (!controller.signal.aborted) setNeighborhoodError(true);
+    });
+    return () => controller.abort();
+  }, [mine]);
+
+  useEffect(() => {
     setPosts([]);
     setPage(null);
 
@@ -69,7 +84,7 @@ export default function PostList({ mine = false }: { mine?: boolean }) {
       request.current?.abort();
       pending.current = false;
     };
-  }, [keyword, mine]);
+  }, [keyword, mine, neighborhoodId]);
 
   return (
     <>
@@ -107,15 +122,24 @@ export default function PostList({ mine = false }: { mine?: boolean }) {
         </form>}
       </div>
 
+      {!mine && <label className="neighborhood-filter">
+        거래 동네
+        <select value={neighborhoodId} onChange={(event) => setNeighborhoodId(event.target.value)}>
+          <option value="">전체 동네</option>
+          {neighborhoods.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+        </select>
+      </label>}
+      {!mine && neighborhoodError && <p role="alert">동네 목록을 불러오지 못했습니다.</p>}
+
       <p className="hint">
         {keyword ? `‘${keyword}’ · ` : ''}최신순 · {posts.length}개 표시
       </p>
 
       {posts.length === 0 && !loading && !error ? (
         <section className="notice">
-          <h3>{keyword ? '검색 결과가 없어요' : '아직 게시글이 없어요'}</h3>
+          <h3>{keyword || (!mine && neighborhoodId) ? '조건에 맞는 게시글이 없어요' : '아직 게시글이 없어요'}</h3>
           <p>
-            {mine ? '내가 게시한 글이 여기에 표시됩니다.' : keyword ? '다른 검색어로 찾아보세요.' : '새로운 물건이 등록되면 여기에 표시됩니다.'}
+            {mine ? '내가 게시한 글이 여기에 표시됩니다.' : neighborhoodId ? '다른 동네나 전체 동네로 찾아보세요.' : keyword ? '다른 검색어로 찾아보세요.' : '새로운 물건이 등록되면 여기에 표시됩니다.'}
           </p>
         </section>
       ) : (
