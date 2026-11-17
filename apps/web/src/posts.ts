@@ -9,6 +9,8 @@ export interface PostSummary {
 }
 
 export interface PostDetail extends PostSummary {
+  neighborhoodId?: number | null;
+  neighborhoodName?: string | null;
   canManage: boolean;
   description: string;
   createdAt: string;
