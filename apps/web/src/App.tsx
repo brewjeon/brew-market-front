@@ -10,8 +10,9 @@ import DraftList from './DraftList';
 import Inquiries, { NewInquiry } from './Inquiries';
 import InquiryNotifications from './InquiryNotifications';
 import FavoriteList from './FavoriteList';
+import MyNeighborhoods from './MyNeighborhoods';
 
-type PageData = { kind: 'list' } | { kind: 'mine' } | { kind: 'favorites' } | { kind: 'detail'; post: PostDetail }
+type PageData = { kind: 'list' } | { kind: 'mine' } | { kind: 'favorites' } | { kind: 'neighborhoods' } | { kind: 'detail'; post: PostDetail }
   | { kind: 'inquiries'; roomId?: string } | { kind: 'new-inquiry'; post: PostDetail };
 type LoadState =
   | { kind: 'loading' }
@@ -97,6 +98,8 @@ export default function App() {
           data = { kind: 'mine' };
         } else if (route === '#/favorites') {
           data = { kind: 'favorites' };
+        } else if (route === '#/my-neighborhoods') {
+          data = { kind: 'neighborhoods' };
         } else if (match) {
           data = { kind: 'detail', post: await getPost(match[1], controller.signal) };
         } else if (inquiry) {
@@ -129,6 +132,7 @@ export default function App() {
             <a href="#/inquiries" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 대화</a>
             <a href="#/my-posts" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 글</a>
             <a href="#/favorites" onClick={() => { setCreating(false); setDraftsOpen(false); }}>관심글</a>
+            <a href="#/my-neighborhoods" onClick={() => { setCreating(false); setDraftsOpen(false); }}>내 동네</a>
             <InquiryNotifications key={member.userId} onNavigate={() => {
               setCreating(false);
               setDraftsOpen(false);
@@ -165,6 +169,10 @@ export default function App() {
             ? member
               ? <FavoriteList key={`${member.userId}-${retry}`} />
               : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 관심글을 볼 수 있습니다.'}</p>
+          : state.data.kind === 'neighborhoods'
+            ? member
+              ? <MyNeighborhoods key={member.userId} />
+              : <p>{authLoading ? '로그인 확인 중…' : '로그인 후 내 동네를 관리할 수 있습니다.'}</p>
           : state.data.kind === 'inquiries'
             ? member
               ? <Inquiries key={`${member.userId}-${state.data.roomId ?? 'list'}`} roomId={state.data.roomId} userId={member.userId} />
