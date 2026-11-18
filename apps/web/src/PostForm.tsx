@@ -2,20 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { mutate } from './account';
 import type { PostDetail, PostDraft } from './posts';
+import { fetchVerifiedNeighborhoods, verifyCurrentNeighborhood } from './verifiedNeighborhoods';
+import type { VerifiedNeighborhood } from './verifiedNeighborhoods';
 
 type Photo = { id: string; url?: string; sourceIndex?: number; file?: File };
-type Neighborhood = { id: number; name: string };
-
-function currentPosition(): Promise<GeolocationCoordinates> {
-  if (!navigator.geolocation) return Promise.reject(new Error('이 브라우저에서는 위치를 확인할 수 없습니다.'));
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve(coords),
-      () => reject(new Error('위치 권한과 기기의 위치 설정을 확인해 주세요.')),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
-    );
-  });
-}
 
 function savedPhotos(urls: string[]): Photo[] {
   return urls.map((url, sourceIndex) => ({ id: url, url, sourceIndex }));
@@ -86,7 +76,7 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
   const [selecting, setSelecting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
+  const [neighborhoods, setNeighborhoods] = useState<VerifiedNeighborhood[]>([]);
   const [neighborhoodId, setNeighborhoodId] = useState(post?.neighborhoodId ?? 0);
   const [verifying, setVerifying] = useState(false);
   const [neighborhoodError, setNeighborhoodError] = useState('');
@@ -95,10 +85,8 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/neighborhoods/verified', { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('인증된 동네를 불러오지 못했습니다.');
-        const options: Neighborhood[] = await response.json();
+    fetchVerifiedNeighborhoods(controller.signal)
+      .then((options) => {
         if (!controller.signal.aborted) {
           setNeighborhoods((current) => [...options.filter((option) =>
             !current.some((item) => item.id === option.id)), ...current]);
@@ -115,8 +103,7 @@ export default function PostForm({ post, draft, onSaved, onCancel }: {
     setVerifying(true);
     setNeighborhoodError('');
     try {
-      const { latitude, longitude, accuracy } = await currentPosition();
-      const verified = await mutate<Neighborhood>('/neighborhoods/verify', 'POST', { latitude, longitude, accuracy });
+      const verified = await verifyCurrentNeighborhood();
       setNeighborhoods((current) => [...current.filter((option) => option.id !== verified.id), verified]);
       setNeighborhoodId(verified.id);
       setError('');
