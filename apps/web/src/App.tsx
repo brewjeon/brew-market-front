@@ -225,7 +225,7 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
   const [error, setError] = useState('');
   async function changeStatus() {
     if (changingStatus || deleting) return;
-    if (nextStatus === 'COMPLETED' && !window.confirm('거래 완료로 변경하면 이전 상태로 되돌릴 수 없습니다. 완료할까요?')) return;
+    if (nextStatus === 'COMPLETED' && !window.confirm('거래를 완료하면 게시글 내용과 상태를 수정할 수 없습니다. 완료할까요?')) return;
     setChangingStatus(true);
     setError('');
     try {
@@ -243,6 +243,8 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
     finally { setDeleting(false); }
   }
   const createdAt = new Date(post.createdAt);
+  const completed = post.status === 'COMPLETED';
+  const activeReservation = post.status === 'RESERVED' && post.reservationRoomId != null;
   const imageUrls = post.imageUrls?.length ? post.imageUrls : post.imageUrl ? [post.imageUrl] : [];
   if (editing) return <PostForm post={post} onSaved={onSaved} onCancel={() => setEditing(false)} />;
   return (
@@ -275,15 +277,22 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
         <a className="button" href={`#/inquiries/new/${post.id}`}>대화 신청</a>
       )}
       {member && post.canManage && <section className="manage-post" aria-label="게시글 관리">
-        {post.status !== 'COMPLETED' ? <fieldset disabled={changingStatus || deleting} className="status-controls">
+        {activeReservation ? <p><a href={'#/inquiries/' + post.reservationRoomId}>예약한 대화로 이동</a></p>
+          : !completed ? <fieldset disabled={changingStatus || deleting} className="status-controls">
           <label htmlFor="post-status">거래 상태</label>
           <select id="post-status" value={nextStatus} onChange={(event) => setNextStatus(event.target.value as PostStatus)}>
-            <option value="FOR_SALE">판매 중</option><option value="RESERVED">예약 중</option><option value="COMPLETED">거래 완료</option>
+            <option value="FOR_SALE">판매 중</option>
+            {post.status === 'RESERVED' && <option value="RESERVED">예약 중</option>}
+            <option value="COMPLETED">거래 완료</option>
           </select>
           <button disabled={nextStatus === post.status} onClick={changeStatus}>{changingStatus ? '변경 중…' : '상태 변경'}</button>
-        </fieldset> : <p className="hint">거래가 완료되었습니다. 이전 상태로 되돌릴 수 없습니다.</p>}
-        <p className="hint">본인이 작성한 게시글만 수정·삭제할 수 있습니다.</p>
-        <div className="actions"><button className="secondary" disabled={deleting} onClick={() => setEditing(true)}>수정</button><button className="secondary" disabled={deleting} onClick={() => setConfirming(true)}>삭제</button></div>
+        </fieldset> : <p className="hint">거래 완료된 게시글은 내용과 상태를 수정할 수 없습니다.</p>}
+        <div className="actions">
+          {!completed && <button className="secondary" disabled={deleting || changingStatus}
+            onClick={() => setEditing(true)}>수정</button>}
+          <button className="secondary" disabled={deleting || activeReservation || changingStatus}
+            onClick={() => setConfirming(true)}>삭제</button>
+        </div>
         {confirming && <div className="delete-confirm"><p>이 게시글과 사진을 영구 삭제할까요? 복구할 수 없습니다.</p><div className="actions"><button disabled={deleting} onClick={remove}>{deleting ? '삭제 중…' : '영구 삭제'}</button><button className="secondary" disabled={deleting} onClick={() => setConfirming(false)}>취소</button></div></div>}
         {error && <p className="error-message" role="alert">{error}</p>}
       </section>}

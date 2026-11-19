@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { mutate } from './account';
 import { readInquiry as read } from './inquiryApi';
 import type { Room, RoomPage } from './inquiryApi';
+import InquiryReservation from './InquiryReservation';
 type Message = { id: number; senderId: number; content: string };
 
 export function InquiryForm({ send, label }: { send: (content: string) => Promise<void>; label: string }) {
@@ -100,6 +101,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [reservationUpdate, setReservationUpdate] = useState(0);
   const messageList = useRef<HTMLUListElement>(null);
   const readThrough = useRef(0);
   const pendingReads = useRef(new Set<number>());
@@ -148,8 +150,12 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
 
     const updates = new EventSource('/api/inquiries/' + roomId + '/events');
     // 재연결 때도 서버에서 현재 상태를 다시 읽어 연결이 끊긴 동안의 변경을 반영한다.
-    updates.onopen = () => void syncRoom();
-    updates.onmessage = () => void syncRoom();
+    function syncAfterEvent() {
+      void syncRoom();
+      setReservationUpdate((value) => value + 1);
+    }
+    updates.onopen = syncAfterEvent;
+    updates.onmessage = syncAfterEvent;
     void syncRoom();
 
     return () => {
@@ -318,6 +324,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {error && <p role="alert">{error}</p>}
       {roomId ? (
         <>
+          <InquiryReservation key={roomId} roomId={roomId} update={reservationUpdate + refresh} />
           <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
             <li key={message.id} data-message-id={message.senderId !== userId ? message.id : undefined}
               className={message.senderId === userId ? 'inquiry-own' : undefined}>

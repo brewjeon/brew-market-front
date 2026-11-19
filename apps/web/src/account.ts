@@ -32,7 +32,10 @@ export async function mutate<T>(path: string, method: string, body?: unknown): P
       throw new Error('임시저장 글이 만료되었거나 삭제되었습니다.');
     }
     if (problem?.code === 'POST_STATUS_CONFLICT') {
-      throw new Error('이미 거래 완료된 글입니다. 새로고침해서 현재 상태를 확인해 주세요.');
+      throw new Error(problem.message ?? '이미 거래 완료된 글입니다. 새로고침해서 현재 상태를 확인해 주세요.');
+    }
+    if (problem?.code === 'POST_RESERVATION_CONFLICT') {
+      throw new Error(problem.message ?? '예약 상태가 바뀌었습니다. 현재 상태를 확인해 주세요.');
     }
     const messages: Record<number, string> = {
       400: '입력값을 확인해 주세요.',
