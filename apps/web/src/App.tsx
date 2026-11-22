@@ -88,8 +88,11 @@ export default function App() {
     const match = /^#\/posts\/([1-9]\d*)$/.exec(route);
     const inquiry = /^#\/inquiries(?:\/([1-9]\d*))?$/.exec(route);
     const newInquiry = /^#\/inquiries\/new\/([1-9]\d*)$/.exec(route);
+    let requestVersion = 0;
+    let detailLoaded = false;
 
     async function load() {
+      const version = ++requestVersion;
       try {
         let data: PageData;
         if (route === '#/' || route === '#') {
@@ -109,17 +112,29 @@ export default function App() {
         } else {
           throw new ApiError(404);
         }
-        if (!controller.signal.aborted) setState({ kind: 'ready', data });
+        if (controller.signal.aborted || version !== requestVersion) return;
+        if (data.kind === 'detail') detailLoaded = true;
+        setState({ kind: 'ready', data });
       } catch (error) {
-        if (!controller.signal.aborted) {
-          setState({ kind: 'error', notFound: error instanceof ApiError && error.status === 404 });
+        if (controller.signal.aborted || version !== requestVersion) return;
+        const notFound = error instanceof ApiError && error.status === 404;
+        if (!detailLoaded || notFound) {
+          setState({ kind: 'error', notFound });
         }
       }
     }
 
     void load();
+    const updates = match ? new EventSource(`/api/posts/${match[1]}/trade-events`) : null;
+    if (updates) {
+      updates.onopen = () => void load();
+      updates.onmessage = () => void load();
+    }
     // 화면을 떠난 뒤 이전 요청이 새 화면의 결과를 덮어쓰지 않도록 취소한다.
-    return () => controller.abort();
+    return () => {
+      updates?.close();
+      controller.abort();
+    };
   }, [route, retry, member?.userId]);
 
   return (
@@ -222,6 +237,7 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
   const [confirming, setConfirming] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [nextStatus, setNextStatus] = useState<PostStatus>(post.status);
+  useEffect(() => setNextStatus(post.status), [post.status]);
   const [error, setError] = useState('');
   async function changeStatus() {
     if (changingStatus || deleting) return;
@@ -246,7 +262,7 @@ function PostContent({ post, member, onSaved, onDeleted }: { post: PostDetail; m
   const completed = post.status === 'COMPLETED';
   const activeReservation = post.status === 'RESERVED' && post.reservationRoomId != null;
   const imageUrls = post.imageUrls?.length ? post.imageUrls : post.imageUrl ? [post.imageUrl] : [];
-  if (editing) return <PostForm post={post} onSaved={onSaved} onCancel={() => setEditing(false)} />;
+  if (editing && !completed) return <PostForm post={post} onSaved={onSaved} onCancel={() => setEditing(false)} />;
   return (
     <article className="detail">
       <a className="back-link" href="#/">← 게시글 목록</a>
