@@ -126,12 +126,29 @@ export default function App() {
 
     void load();
     const updates = match ? new EventSource(`/api/posts/${match[1]}/trade-events`) : null;
+    let refreshTimer: number | undefined;
+
+    function scheduleDetailRefresh() {
+      if (refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void load();
+      }, 100);
+    }
+
+    function refreshVisibleDetail() {
+      if (document.visibilityState === 'visible') scheduleDetailRefresh();
+    }
+
     if (updates) {
-      updates.onopen = () => void load();
-      updates.onmessage = () => void load();
+      updates.onopen = scheduleDetailRefresh;
+      updates.onmessage = scheduleDetailRefresh;
+      document.addEventListener('visibilitychange', refreshVisibleDetail);
     }
     // 화면을 떠난 뒤 이전 요청이 새 화면의 결과를 덮어쓰지 않도록 취소한다.
     return () => {
+      document.removeEventListener('visibilitychange', refreshVisibleDetail);
+      window.clearTimeout(refreshTimer);
       updates?.close();
       controller.abort();
     };
