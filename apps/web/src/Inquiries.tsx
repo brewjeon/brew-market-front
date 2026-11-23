@@ -223,7 +223,8 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
           const previous = previousRooms[index];
           return room.id === previous.id && room.lastMessageId === previous.lastMessageId
             && room.unreadCount === previous.unreadCount && room.title === previous.title
-            && room.postId === previous.postId;
+            && room.postId === previous.postId
+            && room.reservationConfirmed === previous.reservationConfirmed;
         });
         if (firstPage && window.scrollY > 0) {
           setListUpdatePending(!samePage);
@@ -353,7 +354,11 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
           <ul className="inquiry-rooms">{rooms.map((room) => (
             <li key={room.id}>
               <a href={'#/inquiries/' + room.id}>
-                <span><strong>{room.title}</strong><span className="inquiry-preview">{room.lastMessage}</span></span>
+                <span>
+                  <strong>{room.title}</strong>
+                  <span className="inquiry-preview">{room.lastMessage}</span>
+                  {room.reservationConfirmed && <span className="inquiry-reservation-label">예약 확정</span>}
+                </span>
                 <span className="inquiry-room-actions">
                   {room.unreadCount > 0 && (
                     <span className="inquiry-unread" aria-label={`안 읽은 메시지 ${room.unreadCount}건`}>

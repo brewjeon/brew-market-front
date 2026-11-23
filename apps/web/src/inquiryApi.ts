@@ -5,6 +5,7 @@ export type Room = {
   lastMessage: string;
   lastMessageId: number;
   unreadCount: number;
+  reservationConfirmed: boolean;
 };
 
 export type RoomPage = { rooms: Room[]; nextBefore: number | null; unreadRoomCount: number };
