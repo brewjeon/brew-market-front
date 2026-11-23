@@ -106,6 +106,8 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const readThrough = useRef(0);
   const pendingReads = useRef(new Set<number>());
   const moreRequest = useRef<AbortController | null>(null);
+  const lastLoadedMessageId = useRef<number | null>(null);
+  const refreshAfterMore = useRef<(() => void) | null>(null);
   const jumpToLatest = useRef(false);
   const lastSentId = messages.reduce<number | undefined>(
     (latest, message) => message.senderId === userId ? message.id : latest, undefined,
@@ -203,6 +205,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
 
     const request = new AbortController();
     const query = unreadOnly ? '?unreadOnly=true' : '';
+    lastLoadedMessageId.current = null;
     let firstPage: RoomPage | undefined;
     let fetching = false;
     let changed = false;
@@ -213,6 +216,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
         return;
       }
       fetching = true;
+      if (moreRequest.current) refreshAfterMore.current = () => void syncList();
       try {
         const page = await read<RoomPage>(query, request.signal);
         if (request.signal.aborted) return;
@@ -223,11 +227,27 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
           const previous = previousRooms[index];
           return room.id === previous.id && room.lastMessageId === previous.lastMessageId
             && room.unreadCount === previous.unreadCount && room.title === previous.title
-            && room.postId === previous.postId
-            && room.reservationConfirmed === previous.reservationConfirmed;
+            && room.postId === previous.postId;
         });
-        if (firstPage && window.scrollY > 0) {
+        const preserveList = firstPage && (window.scrollY > 0 || lastLoadedMessageId.current !== null);
+        if (preserveList) {
           setListUpdatePending(!samePage);
+        }
+        if (firstPage && (samePage || preserveList)) {
+          const reservations = new Map(page.rooms.map((room) => [room.id, room.reservationConfirmed]));
+          let before = page.nextBefore;
+          while (before !== null && lastLoadedMessageId.current !== null && before > lastLoadedMessageId.current) {
+            const moreQuery = '?before=' + before + (unreadOnly ? '&unreadOnly=true' : '');
+            const nextPage = await read<RoomPage>(moreQuery, request.signal);
+            if (request.signal.aborted) return;
+            nextPage.rooms.forEach((room) => reservations.set(room.id, room.reservationConfirmed));
+            before = nextPage.nextBefore;
+          }
+          setRooms((current) => current.map((room) => {
+            const reservationConfirmed = reservations.get(room.id);
+            return reservationConfirmed === undefined || reservationConfirmed === room.reservationConfirmed
+              ? room : { ...room, reservationConfirmed };
+          }));
         } else if (!samePage) {
           moreRequest.current?.abort();
           moreRequest.current = null;
@@ -265,6 +285,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       request.abort();
       moreRequest.current?.abort();
       moreRequest.current = null;
+      refreshAfterMore.current = null;
       updates.close();
     };
   }, [roomId, refresh, unreadOnly]);
@@ -285,6 +306,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       const query = '?before=' + next + (unreadOnly ? '&unreadOnly=true' : '');
       const page = await read<RoomPage>(query, request.signal);
       if (request.signal.aborted) return;
+      lastLoadedMessageId.current = page.rooms[page.rooms.length - 1]?.lastMessageId ?? lastLoadedMessageId.current;
       setRooms((current) => [...current, ...page.rooms.filter((room) => !current.some(({ id }) => id === room.id))]);
       setNext(page.nextBefore);
     } catch {
@@ -293,6 +315,9 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       if (moreRequest.current === request) {
         moreRequest.current = null;
         setLoading(false);
+        const refreshList = refreshAfterMore.current;
+        refreshAfterMore.current = null;
+        refreshList?.();
       }
     }
   }
