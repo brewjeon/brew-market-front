@@ -63,6 +63,29 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .inquiry-composer-row { display: flex; align-items: flex-end; gap: 8px; }
 .inquiry-composer textarea { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid #bfcabd; border-radius: 12px; font: inherit; resize: vertical; }
 .inquiry-composer button { flex-shrink: 0; padding: 9px 14px; }
+.inquiry-reservation { margin: 16px 0 24px; padding: clamp(14px, 4vw, 22px); border: 1px solid #d7e3d7; border-radius: 16px; background: #f4f8f2; }
+.inquiry-reservation-status { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.4; }
+.inquiry-reservation-status.confirmed { color: #276347; }
+.inquiry-reservation-fields, .inquiry-meeting { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.inquiry-reservation-fields { gap: 12px; margin-top: 16px; }
+.inquiry-reservation-fields label { display: grid; gap: 5px; min-width: 0; font-size: 13px; font-weight: 600; }
+.inquiry-reservation-fields input { min-width: 0; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid #aab7a9; border-radius: 8px; background: white; color: inherit; font: inherit; font-size: 16px; font-weight: 400; }
+.inquiry-reservation-fields input:focus-visible { outline: 2px solid #276347; outline-offset: 2px; }
+.inquiry-meeting { gap: 12px 20px; margin: 14px 0 0; padding: 12px 14px; border: 1px solid #dce7d9; border-radius: 10px; background: #fff; }
+.inquiry-meeting dt { color: #526356; font-size: 12px; }
+.inquiry-meeting dd { margin: 3px 0 0; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.inquiry-reservation-actions, .inquiry-reservation-retry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.inquiry-reservation-actions { justify-content: flex-end; margin-top: 14px; }
+.inquiry-reservation button { min-height: 42px; padding: 8px 14px; font-size: 14px; }
+.inquiry-reservation button:disabled { opacity: .55; cursor: default; }
+.inquiry-reservation .inquiry-reservation-secondary { border: 1px solid #aab7a9; background: white; color: #25382d; }
+.inquiry-reservation-retry p, .inquiry-reservation-error { color: #8a3228; font-size: 13px; }
+.inquiry-reservation-retry p { margin: 0; }
+.inquiry-reservation-error { margin: 10px 0 0; }
+@media (max-width: 520px) {
+  .inquiry-reservation-fields, .inquiry-meeting { grid-template-columns: 1fr; }
+  .inquiry-reservation-actions button { flex: 1; }
+}
 .back-link { font-size: 14px; color: #647366; }
 .detail-heading { margin: 35px 0; padding-bottom: 32px; border-bottom: 1px solid #dce2d8; }
 .detail h1 { font-size: clamp(27px, 4vw, 38px); line-height: 1.4; overflow-wrap: anywhere; }
