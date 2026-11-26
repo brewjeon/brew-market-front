@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import { mutate } from './account';
 import { readInquiry } from './inquiryApi';
 
 type ReservationState = 'AVAILABLE' | 'RESERVED_HERE' | 'RESERVED_ELSEWHERE'
   | 'LEGACY_RESERVED' | 'COMPLETED_HERE' | 'COMPLETED' | 'UNAVAILABLE';
-type Reservation = { state: ReservationState; version: number | null };
+type Reservation = {
+  state: ReservationState;
+  version: number | null;
+  meetingAt: string | null;
+  meetingPlace: string | null;
+};
 type Action = 'CONFIRM' | 'CANCEL' | 'COMPLETE';
+type ReservationChange =
+  | { action: 'CONFIRM'; meetingAt: string; meetingPlace: string }
+  | { action: 'CANCEL' | 'COMPLETE' };
+
+const meetingTimeFormat = new Intl.DateTimeFormat('ko-KR', {
+  year: 'numeric', month: 'long', day: 'numeric',
+  hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+});
 
 const labels: Record<ReservationState, string> = {
   AVAILABLE: '판매 중',
@@ -27,6 +41,8 @@ export default function InquiryReservation({ roomId, update }: { roomId: string;
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [meetingAt, setMeetingAt] = useState('');
+  const [meetingPlace, setMeetingPlace] = useState('');
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const submitting = useRef(false);
@@ -46,14 +62,19 @@ export default function InquiryReservation({ roomId, update }: { roomId: string;
     return () => request.abort();
   }, [path, update, retry]);
 
-  async function change(action: Action) {
+  async function change(request: ReservationChange) {
     const version = reservation?.version;
-    if (version == null || loadError || submitting.current || !window.confirm(actions[action].confirmation)) return;
+    if (version == null || loadError || submitting.current
+      || !window.confirm(actions[request.action].confirmation)) return;
     submitting.current = true;
     setBusy(true);
     setActionError('');
     try {
-      await mutate('/inquiries' + path, 'PATCH', { action, version });
+      await mutate('/inquiries' + path, 'PATCH', { ...request, version });
+      if (request.action === 'CONFIRM') {
+        setMeetingAt('');
+        setMeetingPlace('');
+      }
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : '예약을 변경하지 못했습니다.');
     } finally {
@@ -64,22 +85,73 @@ export default function InquiryReservation({ roomId, update }: { roomId: string;
     }
   }
 
-  const availableActions: Action[] = [];
-  if (reservation && reservation.version !== null && !loadError) {
-    if (reservation.state === 'AVAILABLE') availableActions.push('CONFIRM');
-    if (reservation.state === 'RESERVED_HERE') availableActions.push('CANCEL', 'COMPLETE');
+  function confirmReservation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const time = new Date(meetingAt);
+    const place = meetingPlace.trim();
+    if (!Number.isFinite(time.getTime()) || time.getTime() <= Date.now()) {
+      setActionError('현재보다 늦은 약속 날짜와 시간을 입력해 주세요.');
+      return;
+    }
+    if (!place) {
+      setActionError('만날 장소를 입력해 주세요.');
+      return;
+    }
+    void change({ action: 'CONFIRM', meetingAt: time.toISOString(), meetingPlace: place });
   }
 
+  const canManage = reservation?.version != null && !loadError;
+  const reservedHere = reservation?.state === 'RESERVED_HERE' && !loadError;
+
   return (
-    <section className="manage-post" aria-label="거래 예약">
-      {loadError ? <p role="alert">예약 상태를 불러오지 못했습니다.{' '}
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>다시 시도</button>
-      </p> : <p role="status">{reservation ? labels[reservation.state] : '예약 상태를 확인하는 중…'}</p>}
-      {availableActions.length > 0 && <div className="actions">
-        {availableActions.map((action) => <button key={action} type="button"
-          disabled={busy} onClick={() => void change(action)}>{actions[action].label}</button>)}
+    <section className="inquiry-reservation" aria-label="거래 예약">
+      {loadError ? (
+        <div className="inquiry-reservation-retry">
+          <p role="alert">예약 상태를 불러오지 못했습니다.</p>
+          <button type="button" className="inquiry-reservation-secondary"
+            onClick={() => setRetry((value) => value + 1)}>다시 시도</button>
+        </div>
+      ) : (
+        <p className={reservedHere ? 'inquiry-reservation-status confirmed' : 'inquiry-reservation-status'}
+          role="status">{reservation ? labels[reservation.state] : '예약 상태를 확인하는 중…'}</p>
+      )}
+      {canManage && reservation?.state === 'AVAILABLE' && (
+        <form onSubmit={confirmReservation}>
+          <div className="inquiry-reservation-fields">
+            <label>
+              만날 날짜와 시간
+              <input type="datetime-local" value={meetingAt} required disabled={busy}
+                onChange={(event) => setMeetingAt(event.target.value)} />
+            </label>
+            <label>
+              만날 장소
+              <input type="text" value={meetingPlace} placeholder="예: 역 2번 출구" required maxLength={200} disabled={busy}
+                onChange={(event) => setMeetingPlace(event.target.value)} />
+            </label>
+          </div>
+          <div className="inquiry-reservation-actions">
+            <button type="submit" disabled={busy}>{actions.CONFIRM.label}</button>
+          </div>
+        </form>
+      )}
+      {reservedHere && reservation.meetingAt && reservation.meetingPlace && (
+        <dl className="inquiry-meeting">
+          <div>
+            <dt>만날 날짜와 시간</dt>
+            <dd><time dateTime={reservation.meetingAt}>{meetingTimeFormat.format(new Date(reservation.meetingAt))}</time></dd>
+          </div>
+          <div>
+            <dt>만날 장소</dt>
+            <dd>{reservation.meetingPlace}</dd>
+          </div>
+        </dl>
+      )}
+      {canManage && reservedHere && <div className="inquiry-reservation-actions">
+        {(['CANCEL', 'COMPLETE'] as const).map((action) => <button key={action} type="button"
+          className={action === 'CANCEL' ? 'inquiry-reservation-secondary' : undefined}
+          disabled={busy} onClick={() => void change({ action })}>{actions[action].label}</button>)}
       </div>}
-      {actionError && <p role="alert">{actionError}</p>}
+      {actionError && <p className="inquiry-reservation-error" role="alert">{actionError}</p>}
     </section>
   );
 }
