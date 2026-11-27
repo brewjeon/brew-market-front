@@ -4,7 +4,7 @@ import { mutate } from './account';
 import { readInquiry as read } from './inquiryApi';
 import type { Room, RoomPage } from './inquiryApi';
 import InquiryReservation from './InquiryReservation';
-type Message = { id: number; senderId: number; content: string };
+type Message = { id: number; senderId: number; content: string; kind?: 'TEXT' | 'SYSTEM' };
 
 export function InquiryForm({ send, label }: { send: (content: string) => Promise<void>; label: string }) {
   const [content, setContent] = useState('');
@@ -110,7 +110,7 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
   const refreshAfterMore = useRef<(() => void) | null>(null);
   const jumpToLatest = useRef(false);
   const lastSentId = messages.reduce<number | undefined>(
-    (latest, message) => message.senderId === userId ? message.id : latest, undefined,
+    (latest, message) => message.senderId === userId && message.kind !== 'SYSTEM' ? message.id : latest, undefined,
   );
   useEffect(() => {
     if (!roomId) return;
@@ -351,16 +351,26 @@ export default function Inquiries({ roomId, userId }: { roomId?: string; userId:
       {roomId ? (
         <>
           <InquiryReservation key={roomId} roomId={roomId} update={reservationUpdate + refresh} />
-          <ul ref={messageList} className="inquiry-messages">{messages.map((message) => (
-            <li key={message.id} data-message-id={message.senderId !== userId ? message.id : undefined}
-              className={message.senderId === userId ? 'inquiry-own' : undefined}>
-              {message.senderId !== userId && <span className="inquiry-sender">상대방</span>}
-              <span className="inquiry-bubble">{message.content}</span>
-              {message.id === lastSentId && peerLastReadId !== null && (
-                <span className="inquiry-receipt">{peerLastReadId >= message.id ? '읽음' : '안 읽음'}</span>
-              )}
-            </li>
-          ))}</ul>
+          <ul ref={messageList} className="inquiry-messages">{messages.map((message) => {
+            const own = message.senderId === userId;
+            const receivedMessageId = own ? undefined : message.id;
+            if (message.kind === 'SYSTEM') {
+              return (
+                <li key={message.id} data-message-id={receivedMessageId} className="inquiry-system">
+                  <span>{message.content}</span>
+                </li>
+              );
+            }
+            return (
+              <li key={message.id} data-message-id={receivedMessageId} className={own ? 'inquiry-own' : undefined}>
+                {!own && <span className="inquiry-sender">상대방</span>}
+                <span className="inquiry-bubble">{message.content}</span>
+                {message.id === lastSentId && peerLastReadId !== null && (
+                  <span className="inquiry-receipt">{peerLastReadId >= message.id ? '읽음' : '안 읽음'}</span>
+                )}
+              </li>
+            );
+          })}</ul>
           {!error && !loading && <InquiryForm label="보내기" send={async (content) => {
             await mutate('/inquiries/' + roomId + '/messages', 'POST', { content });
           }} />}

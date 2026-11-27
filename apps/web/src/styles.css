@@ -57,6 +57,8 @@ main { max-width: 1160px; margin: auto; padding: 0 32px 80px; min-height: calc(1
 .inquiry-messages { display: flex; flex-direction: column; gap: 12px; }
 .inquiry-messages li { display: flex; flex-direction: column; align-items: flex-start; }
 .inquiry-messages .inquiry-own { align-items: flex-end; }
+.inquiry-messages .inquiry-system { align-items: center; }
+.inquiry-system span { max-width: 90%; padding: 4px 12px; border: 1px solid #dce2d8; border-radius: 14px; color: #526356; background: #f5f7f3; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
 .inquiry-bubble { max-width: 85%; padding: 8px 12px; border-radius: 14px; background: #edf0e8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .inquiry-own .inquiry-bubble { background: #dcecdf; }
 .inquiry-composer { margin-top: 16px; }
